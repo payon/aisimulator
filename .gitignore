@@ -61,4 +61,6 @@ server.log
 
 # release archives
 *.tar.gz
-*.tar/prisma/db/
+*.tar
+
+/prisma/db/
