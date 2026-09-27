@@ -1,0 +1,17 @@
+User-agent: Googlebot
+Allow: /
+Allow: /manifest.json
+Allow: /.well-known/assetlinks.json
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: *
+Allow: /
+Allow: /manifest.json

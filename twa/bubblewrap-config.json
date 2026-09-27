@@ -1,0 +1,33 @@
+{
+  "name": "AI 플랫폼",
+  "shortName": "AI플랫폼",
+  "launcherName": "AI플랫폼",
+  "packageId": "kr.ai.platform.twa",
+  "startUrl": "/",
+  "scope": "/",
+  "themeColor": "#0f172a",
+  "navigationColor": "#0f172a",
+  "backgroundColor": "#ffffff",
+  "iconPath": "public/icons/icon-512x512.png",
+  "maskableIconPath": "public/icons/icon-192x192.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "release.keystore",
+    "alias": "release"
+  },
+  "additionalTrustedOrigins": [],
+  "webManifestUrl": "/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "enableNotifications": true,
+  "orientation": "unspecified",
+  "minSdkVersion": 24,
+  "targetSdkVersion": 34
+}

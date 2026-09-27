@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 기존 AI 플랫폼 모델
+// ============================================
+
+model AiSettings {
+  id        String   @id @default("default")
+  provider  String   @default("zai-built-in")
+  openaiKey String?
+  geminiKey String?
+  grokKey   String?
+  claudeKey String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  title     String?
+  provider  String   @default("zai-built-in")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ChatMessage[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model QuizResult {
+  id         String   @id @default(cuid())
+  difficulty String   @default("easy")
+  score      Int      @default(0)
+  total      Int      @default(0)
+  createdAt  DateTime @default(now())
+}
+
+model ImageHistory {
+  id        String   @id @default(cuid())
+  style     String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+}
+
+// ============================================
+// 관리자 대시보드 모델
+// ============================================
+
+/// 관리자 사용자
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String    // bcrypt 해시
+  role         String    @default("editor") // superadmin, admin, editor, viewer
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+/// CMS 콘텐츠 항목 (프론트엔드의 모든 텍스트/이미지를 관리)
+model Content {
+  id        String   @id @default(cuid())
+  key       String   @unique // 예: home.hero.title, chat.welcome, image.styles.watercolor.label
+  category  String   @default("general") // home, chat, image, future, quiz, settings, global, nav
+  type      String   @default("text") // text, image, rich_text, json, color, url
+  value     String   // 콘텐츠 값 (텍스트, URL, JSON 등)
+  label     String?  // 관리자 UI에 표시할 라벨
+  description String? // 관리자를 위한 설명
+  sortOrder Int      @default(0)
+  updatedAt DateTime @updatedAt
+  updatedBy String?  // 마지막 수정자
+  createdAt DateTime @default(now())
+
+  versions  ContentVersion[]
+}
+
+/// 사이트 전역 설정
+model SiteConfig {
+  id          String   @id @default("default")
+  siteName    String   @default("AI 플랫폼")
+  siteDescription String @default("AI와 대화하고, 이미지를 변환하고, 미래를 예측하세요.")
+  logoUrl     String?
+  faviconUrl  String?
+  primaryColor String @default("")
+  layoutMode  String   @default("auto") // auto, kiosk-21, kiosk-32, desktop, tablet, mobile
+  language    String   @default("ko")
+  maintenanceMode Boolean @default(false)
+  mockMode    Boolean  @default(false) // 시뮬레이션/목업 모드 (인터넷 없이도 동작 시연)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
+/// 감사 로그 (모든 변경 사항 추적)
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userEmail String?
+  action    String   // create, update, delete, login, logout
+  entity    String   // content, user, config, settings
+  entityId  String?
+  changes   String?  // JSON 문자열로 변경 내용 저장
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user AdminUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+/// 인앱 알림
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   @default("info") // info, warning, success, error
+  priority  String   @default("normal") // low, normal, high, urgent
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  actionUrl String?
+  targetRole String? // 특정 역할에게만 표시 (null = 모두)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// 사용자 활동 추적
+model UserActivity {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String   // page_view, chat_message, quiz_start, image_transform, etc.
+  entity    String   // chat, quiz, image, future, settings, admin
+  metadata  String?  // JSON 문자열
+  sessionId String?  // 브라우저 세션 ID
+  createdAt DateTime @default(now())
+}
+
+/// 콘텐츠 버전 이력
+model ContentVersion {
+  id        String   @id @default(cuid())
+  contentId String
+  key       String
+  oldValue  String?
+  newValue  String
+  updatedBy String?
+  createdAt DateTime @default(now())
+  
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
+
+/// 온보딩 진행 상태
+model OnboardingProgress {
+  id          String @id @default(cuid())
+  sessionId   String @unique
+  step        Int    @default(0)
+  completed   Boolean @default(false)
+  skipped     Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// 권한 정의
+model Permission {
+  id          String @id @default(cuid())
+  role        String @unique // superadmin, admin, editor, viewer
+  canManageUsers   Boolean @default(false)
+  canManageContent Boolean @default(true)
+  canManageConfig  Boolean @default(false)
+  canViewAudit     Boolean @default(false)
+  canDeleteContent Boolean @default(false)
+  canManageAPIKeys Boolean @default(false)
+  canManageNotifications Boolean @default(false)
+  canExportData          Boolean @default(false)
+  canViewAnalytics       Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

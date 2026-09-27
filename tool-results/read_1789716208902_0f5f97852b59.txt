@@ -1,0 +1,797 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useRef } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Hand,
+     7→  HelpCircle,
+     8→  ChevronLeft,
+     9→  ChevronRight,
+    10→  ChevronDown,
+    11→  ChevronUp,
+    12→  X,
+    13→  Sparkles,
+    14→  PartyPopper,
+    15→  Menu,
+    16→} from 'lucide-react';
+    17→import { Button } from '@/components/ui/button';
+    18→import { Badge } from '@/components/ui/badge';
+    19→import { useSpeechSynthesis } from '@/hooks/use-voice';
+    20→import { useSettingsStore, useGuideTourStore } from '@/stores/index';
+    21→import { useSidebar } from '@/components/ui/sidebar';
+    22→
+    23→// === 가이드 스텝 정의 ===
+    24→export interface GuideStep {
+    25→  targetSelector: string;
+    26→  title: string;
+    27→  description: string;
+    28→  position: 'top' | 'bottom' | 'left' | 'right';
+    29→  /** true면 이 스텝에서 모바일 사이드바를 자동으로 열어야 함 */
+    30→  requiresSidebarOpen?: boolean;
+    31→}
+    32→
+    33→// 데스크탑용 스텝 (9단계)
+    34→export const DESKTOP_GUIDE_STEPS: GuideStep[] = [
+    35→  {
+    36→    targetSelector: '[data-guide="voice-toggle"]',
+    37→    title: '음성 켜기/끄기',
+    38→    description: '이 버튼을 누르면 AI의 답변을 소리로 들을 수 있어요. 한 번 더 누르면 꺼져요.',
+    39→    position: 'bottom',
+    40→  },
+    41→  {
+    42→    targetSelector: '[data-guide="accessibility"]',
+    43→    title: '접근성 설정',
+    44→    description: '글자 크기, 음성 속도, 큰 터치 영역 등을 설정할 수 있어요. 눈이 편하시도록 조절해보세요.',
+    45→    position: 'bottom',
+    46→  },
+    47→  {
+    48→    targetSelector: '[data-guide="admin-btn"]',
+    49→    title: '관리자 화면',
+    50→    description: '관리자 로그인 후 콘텐츠와 사용자를 관리할 수 있어요.',
+    51→    position: 'bottom',
+    52→  },
+    53→  {
+    54→    targetSelector: '[data-guide="nav-home"]',
+    55→    title: '홈 화면',
+    56→    description: '언제든 이 버튼을 눌러 첫 화면으로 돌아올 수 있어요.',
+    57→    position: 'right',
+    58→  },
+    59→  {
+    60→    targetSelector: '[data-guide="nav-chat"]',
+    61→    title: 'AI 대화',
+    62→    description: 'AI와 대화하며 궁금한 것을 물어보세요. 음성으로도 질문할 수 있어요!',
+    63→    position: 'right',
+    64→  },
+    65→  {
+    66→    targetSelector: '[data-guide="nav-image"]',
+    67→    title: '이미지 변환',
+    68→    description: '내 사진을 수채화, 만화 등 다양한 스타일로 바꿀 수 있어요.',
+    69→    position: 'right',
+    70→  },
+    71→  {
+    72→    targetSelector: '[data-guide="nav-future"]',
+    73→    title: '미래의 나',
+    74→    description: 'AI로 미래의 내 모습을 만들어볼 수 있어요. 건강 팁도 받아보세요!',
+    75→    position: 'right',
+    76→  },
+    77→  {
+    78→    targetSelector: '[data-guide="nav-quiz"]',
+    79→    title: 'AI 퀴즈',
+    80→    description: 'AI에 대해 얼마나 알고 계신가요? 초급부터 고급까지 퀴즈를 풀어보세요!',
+    81→    position: 'right',
+    82→  },
+    83→  {
+    84→    targetSelector: '[data-guide="nav-settings"]',
+    85→    title: '설정',
+    86→    description: 'API 키를 입력하거나 시뮬레이션 모드를 켤 수 있어요.',
+    87→    position: 'right',
+    88→  },
+    89→];
+    90→
+    91→// 모바일용 스텝 (10단계 — 사이드바 토글 스텝 추가, 네비게이션 위치 'bottom')
+    92→export const MOBILE_GUIDE_STEPS: GuideStep[] = [
+    93→  {
+    94→    targetSelector: '[data-guide="voice-toggle"]',
+    95→    title: '음성 켜기/끄기',
+    96→    description: '이 버튼을 누르면 AI의 답변을 소리로 들을 수 있어요. 한 번 더 누르면 꺼져요.',
+    97→    position: 'bottom',
+    98→  },
+    99→  {
+   100→    targetSelector: '[data-guide="accessibility"]',
+   101→    title: '접근성 설정',
+   102→    description: '글자 크기, 음성 속도, 큰 터치 영역 등을 설정할 수 있어요. 눈이 편하시도록 조절해보세요.',
+   103→    position: 'bottom',
+   104→  },
+   105→  {
+   106→    targetSelector: '[data-guide="admin-btn"]',
+   107→    title: '관리자 화면',
+   108→    description: '관리자 로그인 후 콘텐츠와 사용자를 관리할 수 있어요.',
+   109→    position: 'bottom',
+   110→  },
+   111→  {
+   112→    // ★ 모바일 전용: 메뉴 열기 버튼 안내
+   113→    targetSelector: '[data-guide="sidebar-toggle"]',
+   114→    title: '메뉴 열기',
+   115→    description: '이 버튼을 누르면 화면 왼쪽에서 메뉴가 열려요. 각 기능으로 이동할 수 있습니다.',
+   116→    position: 'bottom',
+   117→  },
+   118→  {
+   119→    targetSelector: '[data-guide="nav-home"]',
+   120→    title: '홈 화면',
+   121→    description: '언제든 이 버튼을 눌러 첫 화면으로 돌아올 수 있어요.',
+   122→    position: 'bottom',
+   123→    requiresSidebarOpen: true,
+   124→  },
+   125→  {
+   126→    targetSelector: '[data-guide="nav-chat"]',
+   127→    title: 'AI 대화',
+   128→    description: 'AI와 대화하며 궁금한 것을 물어보세요. 음성으로도 질문할 수 있어요!',
+   129→    position: 'bottom',
+   130→    requiresSidebarOpen: true,
+   131→  },
+   132→  {
+   133→    targetSelector: '[data-guide="nav-image"]',
+   134→    title: '이미지 변환',
+   135→    description: '내 사진을 수채화, 만화 등 다양한 스타일로 바꿀 수 있어요.',
+   136→    position: 'bottom',
+   137→    requiresSidebarOpen: true,
+   138→  },
+   139→  {
+   140→    targetSelector: '[data-guide="nav-future"]',
+   141→    title: '미래의 나',
+   142→    description: 'AI로 미래의 내 모습을 만들어볼 수 있어요. 건강 팁도 받아보세요!',
+   143→    position: 'bottom',
+   144→    requiresSidebarOpen: true,
+   145→  },
+   146→  {
+   147→    targetSelector: '[data-guide="nav-quiz"]',
+   148→    title: 'AI 퀴즈',
+   149→    description: 'AI에 대해 얼마나 알고 계신가요? 초급부터 고급까지 퀴즈를 풀어보세요!',
+   150→    position: 'bottom',
+   151→    requiresSidebarOpen: true,
+   152→  },
+   153→  {
+   154→    targetSelector: '[data-guide="nav-settings"]',
+   155→    title: '설정',
+   156→    description: 'API 키를 입력하거나 시뮬레이션 모드를 켤 수 있어요.',
+   157→    position: 'bottom',
+   158→    requiresSidebarOpen: true,
+   159→  },
+   160→];
+   161→
+   162→// 하위 호환용 기존 export
+   163→export const GUIDE_STEPS = DESKTOP_GUIDE_STEPS;
+   164→
+   165→// === 툴팁 위치 계산 ===
+   166→interface TooltipPosition {
+   167→  top: number;
+   168→  left: number;
+   169→  arrowPosition: 'top' | 'bottom' | 'left' | 'right';
+   170→}
+   171→
+   172→function calculateTooltipPosition(
+   173→  targetRect: DOMRect,
+   174→  position: GuideStep['position'],
+   175→  tooltipWidth: number,
+   176→  tooltipHeight: number
+   177→): TooltipPosition {
+   178→  const gap = 16;
+   179→  const vw = window.innerWidth;
+   180→  const vh = window.innerHeight;
+   181→  const padding = 12;
+   182→
+   183→  let top = 0;
+   184→  let left = 0;
+   185→  let arrowPosition = position;
+   186→
+   187→  switch (position) {
+   188→    case 'bottom':
+   189→      top = targetRect.bottom + gap;
+   190→      left = targetRect.left + targetRect.width / 2 - tooltipWidth / 2;
+   191→      break;
+   192→    case 'top':
+   193→      top = targetRect.top - tooltipHeight - gap;
+   194→      left = targetRect.left + targetRect.width / 2 - tooltipWidth / 2;
+   195→      break;
+   196→    case 'right':
+   197→      top = targetRect.top + targetRect.height / 2 - tooltipHeight / 2;
+   198→      left = targetRect.right + gap;
+   199→      break;
+   200→    case 'left':
+   201→      top = targetRect.top + targetRect.height / 2 - tooltipHeight / 2;
+   202→      left = targetRect.left - tooltipWidth - gap;
+   203→      break;
+   204→  }
+   205→
+   206→  // Clamp to viewport
+   207→  left = Math.max(padding, Math.min(left, vw - tooltipWidth - padding));
+   208→  top = Math.max(padding, Math.min(top, vh - tooltipHeight - padding));
+   209→
+   210→  // Fallback: if tooltip would be off-screen, reposition
+   211→  if (position === 'bottom' && top + tooltipHeight > vh - padding) {
+   212→    top = targetRect.top - tooltipHeight - gap;
+   213→    arrowPosition = 'top';
+   214→  }
+   215→  if (position === 'top' && top < padding) {
+   216→    top = targetRect.bottom + gap;
+   217→    arrowPosition = 'bottom';
+   218→  }
+   219→  if (position === 'right' && left + tooltipWidth > vw - padding) {
+   220→    left = targetRect.left - tooltipWidth - gap;
+   221→    arrowPosition = 'left';
+   222→  }
+   223→  if (position === 'left' && left < padding) {
+   224→    left = targetRect.right + tooltipWidth + gap;
+   225→    arrowPosition = 'right';
+   226→  }
+   227→
+   228→  return { top, left, arrowPosition };
+   229→}
+   230→
+   231→// === 화살표 아이콘 선택 ===
+   232→function ArrowIcon({ direction, className }: { direction: GuideStep['position']; className?: string }) {
+   233→  switch (direction) {
+   234→    case 'top':
+   235→      return <ChevronUp className={className} />;
+   236→    case 'bottom':
+   237→      return <ChevronDown className={className} />;
+   238→    case 'left':
+   239→      return <ChevronLeft className={className} />;
+   240→    case 'right':
+   241→      return <ChevronRight className={className} />;
+   242→  }
+   243→}
+   244→
+   245→// === 메인 컴포넌트 ===
+   246→export default function SeniorGuideTour() {
+   247→  const { active, currentStep, completed, start, stop, nextStep, prevStep, complete } = useGuideTourStore();
+   248→  const { voiceEnabled, readingSpeed } = useSettingsStore();
+   249→  const { speak, stop: stopTTS } = useSpeechSynthesis();
+   250→
+   251→  // 사이드바 제어 (모바일에서 자동 열기/닫기)
+   252→  const { isMobile, openMobile, setOpenMobile } = useSidebar();
+   253→
+   254→  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+   255→  const [tooltipPos, setTooltipPos] = useState<TooltipPosition>({ top: 0, left: 0, arrowPosition: 'bottom' });
+   256→  const [showWelcome, setShowWelcome] = useState(false);
+   257→  const [showComplete, setShowComplete] = useState(false);
+   258→  const [stepNotFound, setStepNotFound] = useState(false);
+   259→  const [tooltipSize, setTooltipSize] = useState({ width: 320, height: 200 });
+   260→
+   261→  // 투어 중 사이드바를 자동으로 열었는지 추적 → 완료/스킵 시 원래대로 복원
+   262→  const sidebarAutoOpenedRef = useRef(false);
+   263→
+   264→  const tooltipRef = useRef<HTMLDivElement>(null);
+   265→  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+   266→  const rafRef = useRef<number | null>(null);
+   267→  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+   268→  // 자기 자신을 재시도할 때 사용하는 ref (circular dependency 해결)
+   269→  const syncGuidePositionRef = useRef<() => void>(() => {});
+   270→
+   271→  // 현재 디바이스에 맞는 스텝 배열
+   272→  const steps = isMobile ? MOBILE_GUIDE_STEPS : DESKTOP_GUIDE_STEPS;
+   273→
+   274→  // Start tour -> show welcome screen
+   275→  const handleStartTour = useCallback(() => {
+   276→    setShowWelcome(true);
+   277→  }, []);
+   278→
+   279→  // Welcome -> begin actual tour
+   280→  const handleBeginTour = useCallback(() => {
+   281→    setShowWelcome(false);
+   282→    start();
+   283→  }, [start]);
+   284→
+   285→  // Skip from welcome
+   286→  const handleSkipWelcome = useCallback(() => {
+   287→    setShowWelcome(false);
+   288→    complete();
+   289→  }, [complete]);
+   290→
+   291→  // 모바일 사이드바 자동 열기 (필요한 스텝에서 호출)
+   292→  const ensureSidebarOpen = useCallback(() => {
+   293→    if (isMobile && !openMobile) {
+   294→      setOpenMobile(true);
+   295→      sidebarAutoOpenedRef.current = true;
+   296→    }
+   297→  }, [isMobile, openMobile, setOpenMobile]);
+   298→
+   299→  // 모바일 사이드바 자동 닫기 (투어 종료 시)
+   300→  const closeAutoOpenedSidebar = useCallback(() => {
+   301→    if (sidebarAutoOpenedRef.current && isMobile && openMobile) {
+   302→      setOpenMobile(false);
+   303→      sidebarAutoOpenedRef.current = false;
+   304→    }
+   305→  }, [isMobile, openMobile, setOpenMobile]);
+   306→
+   307→  // Combined: find target, update rect, and calculate tooltip position
+   308→  // Uses requestAnimationFrame to avoid synchronous setState in effects
+   309→  const syncGuidePosition = useCallback(() => {
+   310→    if (!active || showWelcome || showComplete) return;
+   311→
+   312→    const step = steps[currentStep];
+   313→    if (!step) {
+   314→      setShowComplete(true);
+   315→      return;
+   316→    }
+   317→
+   318→    // 모바일에서 사이드바가 필요한 스텝인데 사이드바가 닫혀 있으면 열고 재시도
+   319→    if (step.requiresSidebarOpen && isMobile && !openMobile) {
+   320→      ensureSidebarOpen();
+   321→      // 사이드바 Sheet 애니메이션 완료 후 재시도 (350ms 대기)
+   322→      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+   323→      retryTimerRef.current = setTimeout(() => {
+   324→        syncGuidePositionRef.current();
+   325→      }, 350);
+   326→      return;
+   327→    }
+   328→
+   329→    const el = document.querySelector(step.targetSelector) as HTMLElement | null;
+   330→    if (!el) {
+   331→      // 모바일에서 사이드바 내부 요소를 못 찾으면 사이드바를 열고 재시도
+   332→      if (step.requiresSidebarOpen && isMobile) {
+   333→        ensureSidebarOpen();
+   334→        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+   335→        retryTimerRef.current = setTimeout(() => {
+   336→          syncGuidePositionRef.current();
+   337→        }, 350);
+   338→        return;
+   339→      }
+   340→
+   341→      setStepNotFound(true);
+   342→      if (currentStep < steps.length - 1) {
+   343→        nextStep();
+   344→      } else {
+   345→        setShowComplete(true);
+   346→      }
+   347→      return;
+   348→    }
+   349→
+   350→    setStepNotFound(false);
+   351→    const rect = el.getBoundingClientRect();
+   352→    setTargetRect(rect);
+   353→
+   354→    // Scroll element into view if needed
+   355→    const isInViewport =
+   356→      rect.top >= 0 &&
+   357→      rect.left >= 0 &&
+   358→      rect.bottom <= window.innerHeight &&
+   359→      rect.right <= window.innerWidth;
+   360→
+   361→    if (!isInViewport) {
+   362→      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+   363→    }
+   364→
+   365→    // Calculate tooltip position after getting rect
+   366→    // Use rAF for the scroll to settle
+   367→    rafRef.current = requestAnimationFrame(() => {
+   368→      const finalRect = el.getBoundingClientRect();
+   369→      setTargetRect(finalRect);
+   370→
+   371→      const tw = tooltipSize.width;
+   372→      const th = tooltipSize.height;
+   373→      const pos = calculateTooltipPosition(finalRect, step.position, tw, th);
+   374→      setTooltipPos(pos);
+   375→    });
+   376→  }, [active, currentStep, showWelcome, showComplete, nextStep, tooltipSize, steps, isMobile, openMobile, ensureSidebarOpen]);
+   377→
+   378→  // ref 업데이트 (setTimeout 재시도에서 사용)
+   379→  useEffect(() => {
+   380→    syncGuidePositionRef.current = syncGuidePosition;
+   381→  }, [syncGuidePosition]);
+   382→
+   383→  // Measure tooltip size when step changes
+   384→  useEffect(() => {
+   385→    if (tooltipRef.current) {
+   386→      const { width, height } = tooltipRef.current.getBoundingClientRect();
+   387→      setTooltipSize({ width, height });
+   388→    }
+   389→  }, [active, currentStep, showWelcome, showComplete]);
+   390→
+   391→  // Sync position on step change using rAF to avoid lint warning
+   392→  useEffect(() => {
+   393→    rafRef.current = requestAnimationFrame(() => {
+   394→      syncGuidePosition();
+   395→    });
+   396→    return () => {
+   397→      if (rafRef.current !== null) {
+   398→        cancelAnimationFrame(rafRef.current);
+   399→      }
+   400→      if (retryTimerRef.current !== null) {
+   401→        clearTimeout(retryTimerRef.current);
+   402→      }
+   403→    };
+   404→  }, [syncGuidePosition]);
+   405→
+   406→  // Resize observer + window resize/scroll listener for target element
+   407→  useEffect(() => {
+   408→    if (!active || showWelcome || showComplete) return;
+   409→
+   410→    const step = steps[currentStep];
+   411→    if (!step) return;
+   412→
+   413→    const el = document.querySelector(step.targetSelector) as HTMLElement | null;
+   414→    if (!el) return;
+   415→
+   416→    resizeObserverRef.current = new ResizeObserver(() => {
+   417→      const rect = el.getBoundingClientRect();
+   418→      setTargetRect(rect);
+   419→      const tw = tooltipSize.width;
+   420→      const th = tooltipSize.height;
+   421→      const pos = calculateTooltipPosition(rect, step.position, tw, th);
+   422→      setTooltipPos(pos);
+   423→    });
+   424→    resizeObserverRef.current.observe(el);
+   425→
+   426→    const handleResize = () => {
+   427→      requestAnimationFrame(() => syncGuidePosition());
+   428→    };
+   429→    const handleScroll = () => {
+   430→      const rect = el.getBoundingClientRect();
+   431→      setTargetRect(rect);
+   432→      const tw = tooltipSize.width;
+   433→      const th = tooltipSize.height;
+   434→      const pos = calculateTooltipPosition(rect, step.position, tw, th);
+   435→      setTooltipPos(pos);
+   436→    };
+   437→
+   438→    window.addEventListener('resize', handleResize);
+   439→    window.addEventListener('scroll', handleScroll, true);
+   440→
+   441→    return () => {
+   442→      resizeObserverRef.current?.disconnect();
+   443→      window.removeEventListener('resize', handleResize);
+   444→      window.removeEventListener('scroll', handleScroll, true);
+   445→    };
+   446→  }, [active, currentStep, showWelcome, showComplete, syncGuidePosition, tooltipSize, steps]);
+   447→
+   448→  // TTS: read step description aloud when step changes
+   449→  useEffect(() => {
+   450→    if (!active || showWelcome || showComplete) return;
+   451→    if (!voiceEnabled) return;
+   452→
+   453→    const step = steps[currentStep];
+   454→    if (!step) return;
+   455→
+   456→    const timer = setTimeout(() => {
+   457→      speak(step.description, readingSpeed);
+   458→    }, 600);
+   459→
+   460→    return () => {
+   461→      clearTimeout(timer);
+   462→      stopTTS();
+   463→    };
+   464→  }, [active, currentStep, voiceEnabled, showWelcome, showComplete, speak, stopTTS, readingSpeed, steps]);
+   465→
+   466→  // Handle next step
+   467→  const handleNext = useCallback(() => {
+   468→    stopTTS();
+   469→    if (currentStep >= steps.length - 1) {
+   470→      setShowComplete(true);
+   471→    } else {
+   472→      nextStep();
+   473→    }
+   474→  }, [currentStep, nextStep, stopTTS, steps]);
+   475→
+   476→  // Handle previous step
+   477→  const handlePrev = useCallback(() => {
+   478→    stopTTS();
+   479→    prevStep();
+   480→  }, [prevStep, stopTTS]);
+   481→
+   482→  // Handle skip
+   483→  const handleSkip = useCallback(() => {
+   484→    stopTTS();
+   485→    stop();
+   486→    complete();
+   487→    closeAutoOpenedSidebar();
+   488→  }, [stop, complete, stopTTS, closeAutoOpenedSidebar]);
+   489→
+   490→  // Handle complete
+   491→  const handleComplete = useCallback(() => {
+   492→    stopTTS();
+   493→    setShowComplete(false);
+   494→    complete();
+   495→    closeAutoOpenedSidebar();
+   496→  }, [complete, stopTTS, closeAutoOpenedSidebar]);
+   497→
+   498→  // Current step data
+   499→  const step = steps[currentStep];
+   500→  const totalSteps = steps.length;
+   501→
+   502→  return (
+   503→    <>
+   504→      {/* 도움말 버튼 (투어가 비활성일 때 표시) */}
+   505→      {!active && !showWelcome && !showComplete && (
+   506→        <motion.button
+   507→          initial={{ scale: 0 }}
+   508→          animate={{ scale: 1 }}
+   509→          whileHover={{ scale: 1.1 }}
+   510→          whileTap={{ scale: 0.95 }}
+   511→          onClick={handleStartTour}
+   512→          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:shadow-xl transition-shadow"
+   513→          title="사용법 안내"
+   514→          aria-label="사용법 안내 시작"
+   515→        >
+   516→          <HelpCircle className="w-7 h-7" />
+   517→        </motion.button>
+   518→      )}
+   519→
+   520→      <AnimatePresence>
+   521→        {/* ===== 환영 화면 ===== */}
+   522→        {showWelcome && (
+   523→          <motion.div
+   524→            key="guide-welcome"
+   525→            initial={{ opacity: 0 }}
+   526→            animate={{ opacity: 1 }}
+   527→            exit={{ opacity: 0 }}
+   528→            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+   529→          >
+   530→            <motion.div
+   531→              initial={{ scale: 0.85, opacity: 0 }}
+   532→              animate={{ scale: 1, opacity: 1 }}
+   533→              exit={{ scale: 0.85, opacity: 0 }}
+   534→              transition={{ type: 'spring', duration: 0.5 }}
+   535→              className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 sm:p-8 text-center"
+   536→            >
+   537→              {/* Animated icon */}
+   538→              <motion.div
+   539→                className="w-20 h-20 rounded-full mx-auto mb-6 bg-primary/10 flex items-center justify-center"
+   540→                animate={{ scale: [1, 1.08, 1] }}
+   541→                transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }}
+   542→              >
+   543→                <Hand className="w-10 h-10 text-primary" />
+   544→              </motion.div>
+   545→
+   546→              <h2 className="text-2xl font-bold mb-3 text-foreground">
+   547→                AI 플랫폼 사용법 안내
+   548→              </h2>
+   549→              <p className="text-base text-muted-foreground leading-relaxed mb-4">
+   550→                각 버튼의 기능을 하나씩 알려드릴게요.<br />
+   551→                차근차근 따라오시면 됩니다!
+   552→              </p>
+   553→
+   554→              {/* 모바일 안내 추가 */}
+   555→              {isMobile && (
+   556→                <div className="mb-6 p-3 rounded-xl bg-primary/5 border border-primary/10">
+   557→                  <div className="flex items-center gap-2 justify-center mb-1">
+   558→                    <Menu className="w-4 h-4 text-primary" />
+   559→                    <span className="text-sm font-medium text-primary">모바일 안내</span>
+   560→                  </div>
+   561→                  <p className="text-xs text-muted-foreground leading-relaxed">
+   562→                    메뉴 버튼 사용법도 함께 안내해 드려요.
+   563→                  </p>
+   564→                </div>
+   565→              )}
+   566→
+   567→              {!isMobile && <div className="mb-6" />}
+   568→
+   569→              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+   570→                <Button
+   571→                  size="lg"
+   572→                  onClick={handleBeginTour}
+   573→                  className="min-h-[48px] text-base font-semibold px-8"
+   574→                >
+   575→                  안내 시작
+   576→                  <ChevronRight className="w-5 h-5 ml-1" />
+   577→                </Button>
+   578→                <Button
+   579→                  variant="outline"
+   580→                  size="lg"
+   581→                  onClick={handleSkipWelcome}
+   582→                  className="min-h-[48px] text-base px-8"
+   583→                >
+   584→                  건너뛰기
+   585→                </Button>
+   586→              </div>
+   587→            </motion.div>
+   588→          </motion.div>
+   589→        )}
+   590→
+   591→        {/* ===== 완료 화면 ===== */}
+   592→        {showComplete && (
+   593→          <motion.div
+   594→            key="guide-complete"
+   595→            initial={{ opacity: 0 }}
+   596→            animate={{ opacity: 1 }}
+   597→            exit={{ opacity: 0 }}
+   598→            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+   599→          >
+   600→            <motion.div
+   601→              initial={{ scale: 0.85, opacity: 0 }}
+   602→              animate={{ scale: 1, opacity: 1 }}
+   603→              exit={{ scale: 0.85, opacity: 0 }}
+   604→              transition={{ type: 'spring', duration: 0.5 }}
+   605→              className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 sm:p-8 text-center"
+   606→            >
+   607→              {/* Celebration icon */}
+   608→              <motion.div
+   609→                className="w-20 h-20 rounded-full mx-auto mb-6 bg-emerald-100 flex items-center justify-center"
+   610→                initial={{ scale: 0 }}
+   611→                animate={{ scale: 1, rotate: [0, 10, -10, 0] }}
+   612→                transition={{ scale: { type: 'spring', duration: 0.5 }, rotate: { duration: 0.5, delay: 0.3 } }}
+   613→              >
+   614→                <PartyPopper className="w-10 h-10 text-emerald-600" />
+   615→              </motion.div>
+   616→
+   617→              <h2 className="text-2xl font-bold mb-3 text-foreground">
+   618→                축하합니다! 🎉
+   619→              </h2>
+   620→              <p className="text-base text-muted-foreground leading-relaxed mb-8">
+   621→                모든 기능을 알아보셨습니다!<br />
+   622→                이제 자유롭게 사용해보세요.
+   623→              </p>
+   624→
+   625→              <Button
+   626→                size="lg"
+   627→                onClick={handleComplete}
+   628→                className="min-h-[48px] text-base font-semibold px-8"
+   629→              >
+   630→                시작하기
+   631→                <Sparkles className="w-5 h-5 ml-1" />
+   632→              </Button>
+   633→            </motion.div>
+   634→          </motion.div>
+   635→        )}
+   636→
+   637→        {/* ===== 가이드 오버레이 + 툴팁 ===== */}
+   638→        {active && !showWelcome && !showComplete && step && targetRect && !stepNotFound && (
+   639→          <motion.div
+   640→            key="guide-overlay"
+   641→            initial={{ opacity: 0 }}
+   642→            animate={{ opacity: 1 }}
+   643→            exit={{ opacity: 0 }}
+   644→            className="fixed inset-0 z-50"
+   645→          >
+   646→            {/* Dark overlay with cutout */}
+   647→            <svg className="absolute inset-0 w-full h-full">
+   648→              <defs>
+   649→                <mask id="guide-mask">
+   650→                  <rect x="0" y="0" width="100%" height="100%" fill="white" />
+   651→                  <rect
+   652→                    x={targetRect.left - 6}
+   653→                    y={targetRect.top - 6}
+   654→                    width={targetRect.width + 12}
+   655→                    height={targetRect.height + 12}
+   656→                    rx="8"
+   657→                    fill="black"
+   658→                  />
+   659→                </mask>
+   660→              </defs>
+   661→              <rect
+   662→                x="0"
+   663→                y="0"
+   664→                width="100%"
+   665→                height="100%"
+   666→                fill="rgba(0,0,0,0.6)"
+   667→                mask="url(#guide-mask)"
+   668→              />
+   669→            </svg>
+   670→
+   671→            {/* Pulsing highlight border on target */}
+   672→            <motion.div
+   673→              className="absolute pointer-events-none ring-4 ring-primary rounded-lg"
+   674→              style={{
+   675→                top: targetRect.top - 4,
+   676→                left: targetRect.left - 4,
+   677→                width: targetRect.width + 8,
+   678→                height: targetRect.height + 8,
+   679→              }}
+   680→              animate={{
+   681→                boxShadow: [
+   682→                  '0 0 0 0 rgba(59, 130, 246, 0.4)',
+   683→                  '0 0 0 8px rgba(59, 130, 246, 0)',
+   684→                  '0 0 0 0 rgba(59, 130, 246, 0.4)',
+   685→                ],
+   686→              }}
+   687→              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+   688→            />
+   689→
+   690→            {/* Bouncing pointer arrow */}
+   691→            <motion.div
+   692→              className="absolute pointer-events-none text-primary"
+   693→              style={{
+   694→                top: tooltipPos.arrowPosition === 'bottom'
+   695→                  ? tooltipPos.top - 4
+   696→                  : tooltipPos.arrowPosition === 'top'
+   697→                    ? tooltipPos.top + tooltipSize.height + 4
+   698→                    : tooltipPos.top + tooltipSize.height / 2 - 10,
+   699→                left: tooltipPos.arrowPosition === 'right'
+   700→                  ? tooltipPos.left - 4
+   701→                  : tooltipPos.arrowPosition === 'left'
+   702→                    ? tooltipPos.left + tooltipSize.width + 4
+   703→                    : tooltipPos.left + tooltipSize.width / 2 - 10,
+   704→              }}
+   705→              animate={{
+   706→                y: [0, 6, 0],
+   707→                x: [0, 0, 0],
+   708→              }}
+   709→              transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
+   710→            >
+   711→              <ArrowIcon
+   712→                direction={tooltipPos.arrowPosition === 'bottom' ? 'top' : tooltipPos.arrowPosition === 'top' ? 'bottom' : tooltipPos.arrowPosition === 'left' ? 'right' : 'left'}
+   713→                className="w-6 h-6"
+   714→              />
+   715→            </motion.div>
+   716→
+   717→            {/* Speech bubble tooltip */}
+   718→            <motion.div
+   719→              ref={tooltipRef}
+   720→              key={`tooltip-${currentStep}`}
+   721→              initial={{ opacity: 0, scale: 0.9 }}
+   722→              animate={{ opacity: 1, scale: 1 }}
+   723→              exit={{ opacity: 0, scale: 0.9 }}
+   724→              transition={{ type: 'spring', duration: 0.35 }}
+   725→              className="absolute bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 sm:p-6 w-[280px] sm:w-[340px]"
+   726→              style={{
+   727→                top: tooltipPos.top,
+   728→                left: tooltipPos.left,
+   729→              }}
+   730→            >
+   731→              {/* Step counter badge */}
+   732→              <div className="absolute -top-3 right-4">
+   733→                <Badge variant="secondary" className="bg-primary text-primary-foreground text-xs font-bold shadow-sm">
+   734→                  {currentStep + 1}/{totalSteps}
+   735→                </Badge>
+   736→              </div>
+   737→
+   738→              {/* Title */}
+   739→              <h3 className="text-base font-bold text-foreground mb-2 pr-16">
+   740→                {step.title}
+   741→              </h3>
+   742→
+   743→              {/* Description */}
+   744→              <p className="text-sm text-muted-foreground leading-relaxed mb-5">
+   745→                {step.description}
+   746→              </p>
+   747→
+   748→              {/* Navigation */}
+   749→              <div className="flex items-center justify-between gap-2">
+   750→                <Button
+   751→                  variant="ghost"
+   752→                  size="sm"
+   753→                  onClick={handleSkip}
+   754→                  className="text-muted-foreground text-xs min-h-[44px]"
+   755→                >
+   756→                  건너뛰기
+   757→                </Button>
+   758→
+   759→                <div className="flex items-center gap-2">
+   760→                  {currentStep > 0 && (
+   761→                    <Button
+   762→                      variant="outline"
+   763→                      size="sm"
+   764→                      onClick={handlePrev}
+   765→                      className="min-h-[44px] gap-1"
+   766→                    >
+   767→                      <ChevronLeft className="w-4 h-4" />
+   768→                      이전
+   769→                    </Button>
+   770→                  )}
+   771→                  <Button
+   772→                    size="sm"
+   773→                    onClick={handleNext}
+   774→                    className="min-h-[44px] gap-1"
+   775→                  >
+   776→                    {currentStep >= totalSteps - 1 ? '완료' : '다음'}
+   777→                    {currentStep < totalSteps - 1 && <ChevronRight className="w-4 h-4" />}
+   778→                  </Button>
+   779→                </div>
+   780→              </div>
+   781→
+   782→              {/* Close button */}
+   783→              <button
+   784→                onClick={handleSkip}
+   785→                className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+   786→                aria-label="안내 종료"
+   787→              >
+   788→                <X className="w-4 h-4" />
+   789→              </button>
+   790→            </motion.div>
+   791→          </motion.div>
+   792→        )}
+   793→      </AnimatePresence>
+   794→    </>
+   795→  );
+   796→}
+   797→

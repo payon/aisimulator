@@ -1,0 +1,316 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ============================================
+   시니어 사용자 접근성 모드
+   ============================================ */
+
+/* 고대비 모드 */
+.high-contrast {
+  --foreground: oklch(0 0 0);
+  --background: oklch(1 0 0);
+  --muted-foreground: oklch(0.3 0 0);
+  --border: oklch(0.5 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
+
+  font-weight: 500;
+}
+
+.high-contrast .text-muted-foreground {
+  color: oklch(0.35 0 0) !important;
+}
+
+.high-contrast button,
+.high-contrast [role="button"] {
+  border-width: 2px;
+  font-weight: 600;
+}
+
+.high-contrast .border-b,
+.high-contrast .border-r,
+.high-contrast .border-t {
+  border-color: oklch(0.6 0 0) !important;
+}
+
+/* 큰 터치 영역 모드 */
+.touch-large button,
+.touch-large [role="button"],
+.touch-large a,
+.touch-large select,
+.touch-large input[type="text"],
+.touch-large input[type="email"],
+.touch-large input[type="password"],
+.touch-large textarea {
+  min-height: 48px;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+
+/* 키오스크 21인치 (1080p 터치): 최소 56px 터치 타겟 */
+.kiosk-21 button,
+.kiosk-21 [role="button"],
+.kiosk-21 a,
+.kiosk-21 select,
+.kiosk-21 input[type="text"],
+.kiosk-21 input[type="email"],
+.kiosk-21 input[type="password"],
+.kiosk-21 textarea {
+  min-height: 56px;
+}
+
+/* 키오스크 32인치 (1920p+ 터치): 최소 64px 터치 타겟 */
+.kiosk-32 button,
+.kiosk-32 [role="button"],
+.kiosk-32 a,
+.kiosk-32 select,
+.kiosk-32 input[type="text"],
+.kiosk-32 input[type="email"],
+.kiosk-32 input[type="password"],
+.kiosk-32 textarea {
+  min-height: 64px;
+}
+
+/* ============================================
+   시니어 반응형 이미지 (화면 맞춤형 자동 사이징)
+   - 잘림 없는 object-contain 고정
+   - 모바일 < 태블릿(sm) < 데스크톱(lg) < 21" < 32" 순 확대
+   ============================================ */
+
+.senior-img-frame {
+  width: 100%;
+  overflow: hidden;
+  background: var(--muted);
+  border-radius: 0.5rem;
+}
+
+.senior-img-el {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* 기본형 (비교/결과 이미지) */
+.senior-img-default {
+  height: 12rem; /* 모바일 192px */
+}
+@media (min-width: 640px) {
+  .senior-img-default {
+    height: 16rem; /* 태블릿 256px */
+  }
+}
+@media (min-width: 1024px) {
+  .senior-img-default {
+    height: 20rem; /* 데스크톱 320px */
+  }
+}
+.kiosk-21 .senior-img-default {
+  height: min(52vh, 32rem); /* 21인치: 화면 비례, 최대 512px */
+}
+.kiosk-32 .senior-img-default {
+  height: min(56vh, 40rem); /* 32인치: 화면 비례, 최대 640px */
+}
+
+/* 강조형 (미래 모습 등 단일 결과물) */
+.senior-img-large {
+  height: 14rem; /* 모바일 224px */
+}
+@media (min-width: 640px) {
+  .senior-img-large {
+    height: 18rem; /* 태블릿 288px */
+  }
+}
+@media (min-width: 1024px) {
+  .senior-img-large {
+    height: 24rem; /* 데스크톱 384px */
+  }
+}
+.kiosk-21 .senior-img-large {
+  height: min(58vh, 36rem);
+}
+.kiosk-32 .senior-img-large {
+  height: min(62vh, 46rem);
+}
+
+/* 썸네일형 (관리자 미리보기) */
+.senior-img-thumb {
+  width: 4rem;
+  height: 4rem;
+  flex-shrink: 0;
+}
+@media (min-width: 640px) {
+  .senior-img-thumb {
+    width: 5rem;
+    height: 5rem;
+  }
+}
+.kiosk-21 .senior-img-thumb {
+  width: 6rem;
+  height: 6rem;
+}
+.kiosk-32 .senior-img-thumb {
+  width: 7rem;
+  height: 7rem;
+}
+
+.touch-large .text-sm {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+/* 커스텀 스크롤바 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.75 0 0);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.6 0 0);
+}
+
+/* 폰트 크기 스케일링 (시니어용) */
+.text-lg body,
+.text-lg .text-sm {
+  line-height: 1.7;
+}
+
+.text-xl body,
+.text-xl .text-sm {
+  line-height: 1.8;
+}
+
+/* 포커스 링 강화 (시니어용) */
+.high-contrast *:focus-visible {
+  outline: 3px solid oklch(0.5 0.2 260);
+  outline-offset: 2px;
+}

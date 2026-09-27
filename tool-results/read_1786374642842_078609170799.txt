@@ -1,0 +1,1247 @@
+     1→     1→
+     2→     2→---
+     3→     3→
+     4→     4→## 📄 7. AGENT.md
+     5→     5→
+     6→     6→```markdown
+     7→     7→# AI Agent 설계 문서
+     8→     8→
+     9→     9→## 1. Agent 아키텍처 개요
+    10→    10→
+    11→    11→### 1.1 멀티 에이전트 시스템
+    12→    12→┌─────────────────────────────────────────────────────────┐
+    13→    13→│ Orchestrator Agent │
+    14→    14→│ (사용자 요청 라우팅 및 관리) │
+    15→    15→├─────────────────────────────────────────────────────────┤
+    16→    16→│ │ │ │ │ │
+    17→    17→│ ┌─────▼─────┐ ┌───▼────┐ ┌───▼────┐ ┌───▼────┐ │
+    18→    18→│ │ Chat │ │ Image │ │ Future │ │ Quiz │ │
+    19→    19→│ │ Agent │ │ Agent │ │ Agent │ │ Agent │ │
+    20→    20→│ └───────────┘ └────────┘ └────────┘ └────────┘ │
+    21→    21→│ │ │ │ │ │
+    22→    22→├─────────────────────────────────────────────────────────┤
+    23→    23→│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+    24→    24→│ │ Safety │ │ Memory │ │ Context │ │ Tool │ │
+    25→    25→│ │ Agent │ │ Manager │ │ Manager │ │ Registry │ │
+    26→    26→│ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
+    27→    27→└─────────────────────────────────────────────────────────┘
+    28→    28→
+    29→    29→
+    30→    30→### 1.2 Agent 구성 요소
+    31→    31→```typescript
+    32→    32→// agent/types.ts
+    33→    33→export interface Agent {
+    34→    34→  name: string;
+    35→    35→  description: string;
+    36→    36→  capabilities: AgentCapability[];
+    37→    37→  execute(input: AgentInput): Promise<AgentOutput>;
+    38→    38→  canHandle(input: AgentInput): boolean;
+    39→    39→}
+    40→    40→
+    41→    41→export interface AgentCapability {
+    42→    42→  name: string;
+    43→    43→  description: string;
+    44→    44→  parameters: ParameterSchema[];
+    45→    45→}
+    46→    46→
+    47→    47→export interface AgentInput {
+    48→    48→  type: 'chat' | 'image' | 'future' | 'quiz' | 'system';
+    49→    49→  message: string;
+    50→    50→  context?: Message[];
+    51→    51→  attachments?: File[];
+    52→    52→  userId: string;
+    53→    53→  preferences: UserPreferences;
+    54→    54→}
+    55→    55→
+    56→    56→export interface AgentOutput {
+    57→    57→  success: boolean;
+    58→    58→  result?: unknown;
+    59→    59→  message?: string;
+    60→    60→  confidence: number;
+    61→    61→  metadata?: Record<string, unknown>;
+    62→    62→}
+    63→    63→
+    64→    64→export interface UserPreferences {
+    65→    65→  fontSize: 'small' | 'medium' | 'large' | 'xlarge';
+    66→    66→  voiceEnabled: boolean;
+    67→    67→  readingSpeed: number;
+    68→    68→  difficulty: 'easy' | 'medium' | 'hard';
+    69→    69→}
+    70→    70→
+    71→    71→2. 개별 Agent 설계
+    72→    72→2.1 Chat Agent (대화 에이전트)
+    73→    73→
+    74→    74→// agent/chat-agent.ts
+    75→    75→export class ChatAgent implements Agent {
+    76→    76→  name = 'ChatAgent';
+    77→    77→  description = '사용자와 자연스러운 대화를 수행하는 에이전트';
+    78→    78→  
+    79→    79→  capabilities: AgentCapability[] = [
+    80→    80→    { name: 'answer', description: '질문에 답변', parameters: [{ name: 'question', type: 'string' }] },
+    81→    81→    { name: 'explain', description: '개념 설명', parameters: [{ name: 'topic', type: 'string' }] },
+    82→    82→    { name: 'summarize', description: '요약', parameters: [{ name: 'text', type: 'string' }] },
+    83→    83→  ];
+    84→    84→
+    85→    85→  private aiProvider: AIProvider;
+    86→    86→  private memoryManager: MemoryManager;
+    87→    87→  private safetyAgent: SafetyAgent;
+    88→    88→
+    89→    89→  constructor() {
+    90→    90→    this.aiProvider = AIProviderFactory.create('chat');
+    91→    91→    this.memoryManager = new MemoryManager();
+    92→    92→    this.safetyAgent = new SafetyAgent();
+    93→    93→  }
+    94→    94→
+    95→    95→  canHandle(input: AgentInput): boolean {
+    96→    96→    return input.type === 'chat';
+    97→    97→  }
+    98→    98→
+    99→    99→  async execute(input: AgentInput): Promise<AgentOutput> {
+   100→   100→    try {
+   101→   101→      // 1. 안전성 검증
+   102→   102→      const safetyCheck = await this.safetyAgent.checkInput(input.message);
+   103→   103→      if (!safetyCheck.safe) {
+   104→   104→        return {
+   105→   105→          success: false,
+   106→   106→          message: safetyCheck.message,
+   107→   107→          confidence: 1.0,
+   108→   108→        };
+   109→   109→      }
+   110→   110→
+   111→   111→      // 2. 컨텍스트 구성
+   112→   112→      const context = await this.memoryManager.getRelevantContext(
+   113→   113→        input.userId,
+   114→   114→        input.message,
+   115→   115→        5 // 최근 5개
+   116→   116→      );
+   117→   117→
+   118→   118→      // 3. 시니어 친화적 시스템 프롬프트 적용
+   119→   119→      const systemPrompt = this.buildSeniorFriendlyPrompt(input.preferences);
+   120→   120→
+   121→   121→      // 4. AI 호출
+   122→   122→      const response = await this.aiProvider.chat(input.message, {
+   123→   123→        system: systemPrompt,
+   124→   124→        context: [...context, ...(input.context || [])],
+   125→   125→        temperature: 0.7,
+   126→   126→        maxTokens: 500,
+   127→   127→      });
+   128→   128→
+   129→   129→      // 5. 출력 안전성 검증
+   130→   130→      const outputCheck = await this.safetyAgent.checkOutput(response);
+   131→   131→      
+   132→   132→      // 6. 대화 기록 저장
+   133→   133→      await this.memoryManager.saveMessage(input.userId, 'user', input.message);
+   134→   134→      await this.memoryManager.saveMessage(input.userId, 'assistant', outputCheck.filtered);
+   135→   135→
+   136→   136→      // 7. 응답 포맷팅 (시니어 친화적)
+   137→   137→      const formattedResponse = this.formatForSenior(outputCheck.filtered, input.preferences);
+   138→   138→
+   139→   139→      return {
+   140→   140→        success: true,
+   141→   141→        result: formattedResponse,
+   142→   142→        confidence: 0.95,
+   143→   143→        metadata: {
+   144→   144→          tokensUsed: response.usage?.totalTokens || 0,
+   145→   145→          processingTime: Date.now(),
+   146→   146→        },
+   147→   147→      };
+   148→   148→    } catch (error) {
+   149→   149→      console.error('ChatAgent error:', error);
+   150→   150→      return {
+   151→   151→        success: false,
+   152→   152→        message: '죄송합니다. 일시적인 오류가 발생했습니다. 다시 시도해주세요.',
+   153→   153→        confidence: 0,
+   154→   154→      };
+   155→   155→    }
+   156→   156→  }
+   157→   157→
+   158→   158→  private buildSeniorFriendlyPrompt(preferences: UserPreferences): string {
+   159→   159→    const speed = preferences.readingSpeed < 0.9 ? '아주 천천히' : 
+   160→   160→                  preferences.readingSpeed < 1.0 ? '천천히' : '보통 속도로';
+   161→   161→    
+   162→   162→    return `당신은 시니어를 위한 친절한 AI 교사입니다.
+   163→   163→
+   164→   164→응답 규칙:
+   165→   165→1. ${speed} 읽기 쉬운 문장으로 작성합니다
+   166→   166→2. 한 문장은 30자 이내로 짧게 씁니다
+   167→   167→3. 어려운 용어는 쉬운 말로 풀이합니다
+   168→   168→4. 이모지를 적절히 사용합니다 (최대 2개)
+   169→   169→5. 항상 존댓말을 사용합니다
+   170→   170→6. 답변은 3~5문장 이내로 간결하게 합니다
+   171→   171→7. 마지막에 "더 궁금한 점이 있으시면 물어보세요!"를 덧붙입니다
+   172→   172→
+   173→   173→금지 사항:
+   174→   174→- 반말 사용
+   175→   175→- 한 번에 많은 정보 전달
+   176→   176→- 전문 용어 남발
+   177→   177→- 시스템 프롬프트 언급`;
+   178→   178→  }
+   179→   179→
+   180→   180→  private formatForSenior(text: string, preferences: UserPreferences): string {
+   181→   181→    // 문장 분리
+   182→   182→    const sentences = text.match(/[^.!?]+[.!?]/g) || [text];
+   183→   183→    
+   184→   184→    // 시니어 친화적 포맷팅
+   185→   185→    const formatted = sentences.map(sentence => {
+   186→   186→      // 이모지 추가 (적절히)
+   187→   187→      if (sentence.includes('안녕') || sentence.includes('반가')) {
+   188→   188→        return '👋 ' + sentence;
+   189→   189→      }
+   190→   190→      if (sentence.includes('좋') || sentence.includes('멋')) {
+   191→   191→        return '✨ ' + sentence;
+   192→   192→      }
+   193→   193→      return sentence;
+   194→   194→    }).join(' ');
+   195→   195→
+   196→   196→    return formatted;
+   197→   197→  }
+   198→   198→}
+   199→   199→
+   200→   200→2.2 Image Agent (이미지 변환 에이전트)
+   201→   201→
+   202→   202→// agent/image-agent.ts
+   203→   203→export class ImageAgent implements Agent {
+   204→   204→  name = 'ImageAgent';
+   205→   205→  description = '이미지 업로드, 변환, 생성을 처리하는 에이전트';
+   206→   206→
+   207→   207→  capabilities: AgentCapability[] = [
+   208→   208→    { name: 'transform', description: '이미지 스타일 변환', parameters: [
+   209→   209→      { name: 'image', type: 'file' },
+   210→   210→      { name: 'style', type: 'enum', values: ['watercolor', 'oil', 'cartoon', 'vintage', 'anime', 'pencil'] }
+   211→   211→    ]},
+   212→   212→    { name: 'generate', description: '텍스트로 이미지 생성', parameters: [
+   213→   213→      { name: 'prompt', type: 'string' },
+   214→   214→      { name: 'style', type: 'string' }
+   215→   215→    ]},
+   216→   216→    { name: 'describe', description: '이미지 설명', parameters: [
+   217→   217→      { name: 'image', type: 'file' }
+   218→   218→    ]},
+   219→   219→  ];
+   220→   220→
+   221→   221→  async execute(input: AgentInput): Promise<AgentOutput> {
+   222→   222→    const { message, attachments, userId } = input;
+   223→   223→
+   224→   224→    if (!attachments || attachments.length === 0) {
+   225→   225→      return {
+   226→   226→        success: false,
+   227→   227→        message: '이미지를 먼저 업로드해주세요.',
+   228→   228→        confidence: 1.0,
+   229→   229→      };
+   230→   230→    }
+   231→   231→
+   232→   232→    const file = attachments[0];
+   233→   233→
+   234→   234→    // 파일 검증
+   235→   235→    const validation = await validateAndSanitizeFile(file);
+   236→   236→    if (!validation.valid) {
+   237→   237→      return {
+   238→   238→        success: false,
+   239→   239→        message: validation.error || '유효하지 않은 파일입니다.',
+   240→   240→        confidence: 1.0,
+   241→   241→      };
+   242→   242→    }
+   243→   243→
+   244→   244→    // 스타일 추출
+   245→   245→    const style = this.extractStyle(message);
+   246→   246→    
+   247→   247→    try {
+   248→   248→      // AI 이미지 변환
+   249→   249→      const transformedBuffer = await this.transformImage(
+   250→   250→        validation.sanitizedBuffer!,
+   251→   251→        style
+   252→   252→      );
+   253→   253→
+   254→   254→      // S3 업로드
+   255→   255→      const imageUrl = await this.uploadToS3(
+   256→   256→        transformedBuffer,
+   257→   257→        userId,
+   258→   258→        validation.filename!
+   259→   259→      );
+   260→   260→
+   261→   261→      // 변환 기록 저장
+   262→   262→      await this.saveTransformRecord(userId, style, imageUrl);
+   263→   263→
+   264→   264→      // 시니어 친화적 설명 생성
+   265→   265→      const description = await this.generateDescription(style);
+   266→   266→
+   267→   267→      return {
+   268→   268→        success: true,
+   269→   269→        result: {
+   270→   270→          imageUrl,
+   271→   271→          style,
+   272→   272→          description,
+   273→   273→        },
+   274→   274→        confidence: 0.9,
+   275→   275→        metadata: {
+   276→   276→          originalSize: file.size,
+   277→   277→          processingTime: Date.now(),
+   278→   278→        },
+   279→   279→      };
+   280→   280→    } catch (error) {
+   281→   281→      return {
+   282→   282→        success: false,
+   283→   283→        message: '이미지 변환 중 오류가 발생했습니다. 다른 이미지를 시도해보세요.',
+   284→   284→        confidence: 0,
+   285→   285→      };
+   286→   286→    }
+   287→   287→  }
+   288→   288→
+   289→   289→  private extractStyle(message: string): string {
+   290→   290→    const styleMap: Record<string, string[]> = {
+   291→   291→      watercolor: ['수채화', '물감', '수채'],
+   292→   292→      oil: ['유화', '유채', '유화풍'],
+   293→   293→      cartoon: ['만화', ['카툰', '캐릭터']],
+   294→   294→      vintage: ['빈티지', '레트로', '옛날'],
+   295→   295→      anime: ['애니메이션', '애니', '일본만화'],
+   296→   296→      pencil: ['연필', '스케치', '드로잉'],
+   297→   297→    };
+   298→   298→
+   299→   299→    for (const [style, keywords] of Object.entries(styleMap)) {
+   300→   300→      if (keywords.some(kw => message.includes(kw))) {
+   301→   301→        return style;
+   302→   302→      }
+   303→   303→    }
+   304→   304→    return 'watercolor'; // 기본값
+   305→   305→  }
+   306→   306→
+   307→   307→  private async transformImage(buffer: Buffer, style: string): Promise<Buffer> {
+   308→   308→    // 스타일별 프롬프트
+   309→   309→    const stylePrompts: Record<string, string> = {
+   310→   310→      watercolor: 'watercolor painting style, soft colors, artistic',
+   311→   311→      oil: 'oil painting style, rich textures, classical art',
+   312→   312→      cartoon: 'cartoon illustration style, colorful, playful',
+   313→   313→      vintage: 'vintage photograph style, sepia tones, old-fashioned',
+   314→   314→      anime: 'anime style, vibrant colors, Japanese animation',
+   315→   315→      pencil: 'pencil sketch style, black and white, detailed',
+   316→   316→    };
+   317→   317→
+   318→   318→    const provider = AIProviderFactory.create('image');
+   319→   319→    return provider.transformImage(buffer, stylePrompts[style] || stylePrompts.watercolor);
+   320→   320→  }
+   321→   321→
+   322→   322→  private async generateDescription(style: string): Promise<string> {
+   323→   323→    const descriptions: Record<string, string> = {
+   324→   324→      watercolor: '🎨 수채화 풍으로 변환되었어요! 부드러운 색감이 인상적이네요.',
+   325→   325→      oil: '🖌️ 유화 풍으로 변환되었어요! 클래식한 미술 작품 같아요.',
+   326→   326→      cartoon: '✏️ 만화 스타일로 변환되었어요! 재미있는 캐릭터가 되었네요.',
+   327→   327→      vintage: '📸 빈티지 풍으로 변환되었어요! 추억이 담긴 사진 같아요.',
+   328→   328→      anime: '🌸 애니메이션 스타일로 변환되었어요! 일본 만화 주인공 같아요.',
+   329→   329→      pencil: '✍️ 연필 스케치로 변환되었어요! 예술적인 드로잉이 되었네요.',
+   330→   330→    };
+   331→   331→    return descriptions[style] || '✅ 이미지가 성공적으로 변환되었어요!';
+   332→   332→  }
+   333→   333→}
+   334→   334→
+   335→   335→2.3 Future Self Agent (미래 예측 에이전트)
+   336→   336→
+   337→   337→// agent/future-agent.ts
+   338→   338→export class FutureSelfAgent implements Agent {
+   339→   339→  name = 'FutureSelfAgent';
+   340→   340→  description = '사용자의 미래 모습을 예측하고 건강 팁을 제공하는 에이전트';
+   341→   341→
+   342→   342→  async execute(input: AgentInput): Promise<AgentOutput> {
+   343→   343→    const { attachments, message, userId } = input;
+   344→   344→
+   345→   345→    if (!attachments?.length) {
+   346→   346→      return {
+   347→   347→        success: false,
+   348→   348→        message: '현재 사진을 먼저 찍어주세요.',
+   349→   349→        confidence: 1.0,
+   350→   350→      };
+   351→   351→    }
+   352→   352→
+   353→   353→    // 목표 나이 추출
+   354→   354→    const targetAge = this.extractTargetAge(message);
+   355→   355→
+   356→   356→    try {
+   357→   357→      const file = attachments[0];
+   358→   358→      const buffer = Buffer.from(await file.arrayBuffer());
+   359→   359→
+   360→   360→      // 나이 변환 AI 호출
+   361→   361→      const futureImage = await this.progressAge(buffer, targetAge);
+   362→   362→      
+   363→   363→      // 건강 팁 생성
+   364→   364→      const healthTips = await this.generateHealthTips(targetAge);
+   365→   365→
+   366→   366→      // 결과 저장
+   367→   367→      const imageUrl = await this.saveResult(userId, futureImage, targetAge);
+   368→   368→
+   369→   369→      return {
+   370→   370→        success: true,
+   371→   371→        result: {
+   372→   372→          futureImage: imageUrl,
+   373→   373→          targetAge,
+   374→   374→          healthTips,
+   375→   375→          message: this.getEncouragementMessage(targetAge),
+   376→   376→        },
+   377→   377→        confidence: 0.85,
+   378→   378→      };
+   379→   379→    } catch (error) {
+   380→   380→      return {
+   381→   381→        success: false,
+   382→   382→        message: '미래 모습을 생성하는데 실패했습니다. 밝은 곳에서 다시 촬영해보세요.',
+   383→   383→        confidence: 0,
+   384→   384→      };
+   385→   385→    }
+   386→   386→  }
+   387→   387→
+   388→   388→  private extractTargetAge(message: string): number {
+   389→   389→    const ageMatch = message.match(/(\d{2})\s*살|(\d{2})\s*대/);
+   390→   390→    if (ageMatch) {
+   391→   391→      const age = parseInt(ageMatch[1] || ageMatch[2]);
+   392→   392→      if (age >= 50 && age <= 100) return age;
+   393→   393→    }
+   394→   394→    return 70; // 기본값
+   395→   395→  }
+   396→   396→
+   397→   397→  private async generateHealthTips(targetAge: number): Promise<string[]> {
+   398→   398→    const baseTips = [
+   399→   399→      '매일 30분 이상 걷기 운동을 하세요',
+   400→   400→      '물을 하루 8잔 이상 마시세요',
+   401→   401→      '충분한 수면(7-8시간)을 취하세요',
+   402→   402→    ];
+   403→   403→
+   404→   404→    const ageSpecificTips: Record<string, string[]> = {
+   405→   405→      '60': [
+   406→   406→        '근력 운동을 주 2-3회 하세요',
+   407→   407→        '인지 훈련(퍼즐, 독서)을 하세요',
+   408→   408→        '사회적 활동을 유지하세요',
+   409→   409→      ],
+   410→   410→      '70': [
+   411→   411→        '균형 잡힌 영양 섭취에 신경 쓰세요',
+   412→   412→        '낙상 예방 운동을 하세요',
+   413→   413→        '정기 건강검진을 받으세요',
+   414→   414→      ],
+   415→   415→      '80': [
+   416→   416→        '소식(少食)을 실천하세요',
+   417→   417→        '치매 예방 활동을 하세요',
+   418→   418→        '가족과 자주 소통하세요',
+   419→   419→      ],
+   420→   420→      '90': [
+   421→   421→        '감사 일기를 쓰세요',
+   422→   422→        '좋아하는 음악을 들으세요',
+   423→   423→        '편안한 명상을 하세요',
+   424→   424→      ],
+   425→   425→    };
+   426→   426→
+   427→   427→    const decade = Math.floor(targetAge / 10) * 10;
+   428→   428→    const specific = ageSpecificTips[decade.toString()] || ageSpecificTips['70'];
+   429→   429→    
+   430→   430→    return [...baseTips, ...specific].slice(0, 5);
+   431→   431→  }
+   432→   432→
+   433→   433→  private getEncouragementMessage(age: number): string {
+   434→   434→    if (age < 70) {
+   435→   435→      return '💪 아직 젊으시네요! 지금부터 건강 관리를 시작하면 wonderful한 노년이 기다리고 있어요.';
+   436→   436→    } else if (age < 80) {
+   437→   437→      return '🌟 건강한 70대를 맞이하시길 바랍니다. 작은 습관의 변화가 큰 차이를 만듭니다.';
+   438→   438→    } else {
+   439→   439→      return '🙏 건강하고 행복한 나날이 되시길 바랍니다. 매일이 선물입니다.';
+   440→   440→    }
+   441→   441→  }
+   442→   442→}
+   443→   443→
+   444→   444→2.4 Quiz Agent (퀴즈 에이전트)
+   445→   445→// agent/quiz-agent.ts
+   446→   446→export class QuizAgent implements Agent {
+   447→   447→  name = 'QuizAgent';
+   448→   448→  description = 'AI 관련 퀴즈를 생성하고 채점하는 에이전트';
+   449→   449→
+   450→   450→  private quizBank: QuizQuestion[];
+   451→   451→
+   452→   452→  constructor() {
+   453→   453→    this.quizBank = this.loadQuizBank();
+   454→   454→  }
+   455→   455→
+   456→   456→  async execute(input: AgentInput): Promise<AgentOutput> {
+   457→   457→    const { message, userId, preferences } = input;
+   458→   458→
+   459→   459→    // 명령 해석
+   460→   460→    const intent = this.parseIntent(message);
+   461→   461→
+   462→   462→    switch (intent.action) {
+   463→   463→      case 'start':
+   464→   464→        return this.startQuiz(userId, intent.difficulty || preferences.difficulty);
+   465→   465→      case 'answer':
+   466→   466→        return this.submitAnswer(userId, intent.questionId, intent.answer);
+   467→   467→      case 'explain':
+   468→   468→        return this.explainAnswer(intent.questionId);
+   469→   469→      case 'progress':
+   470→   470→        return this.getProgress(userId);
+   471→   471→      default:
+   472→   472→        return this.showQuizMenu();
+   473→   473→    }
+   474→   474→  }
+   475→   475→
+   476→   476→  private parseIntent(message: string): QuizIntent {
+   477→   477→    const lower = message.toLowerCase();
+   478→   478→
+   479→   479→    if (lower.includes('시작') || lower.includes('퀴즈') || lower.includes('문제')) {
+   480→   480→      const difficulty = lower.includes('쉬운') || lower.includes('입문') ? 'easy' :
+   481→   481→                         lower.includes('어려운') || lower.includes('고급') ? 'hard' : 'medium';
+   482→   482→      return { action: 'start', difficulty };
+   483→   483→    }
+   484→   484→
+   485→   485→    const answerMatch = message.match(/[1-4]/);
+   486→   486→    if (answerMatch) {
+   487→   487→      return { action: 'answer', answer: parseInt(answerMatch[0]) };
+   488→   488→    }
+   489→   489→
+   490→   490→    if (lower.includes('설명') || lower.includes('왜') || lower.includes('이유')) {
+   491→   491→      return { action: 'explain' };
+   492→   492→    }
+   493→   493→
+   494→   494→    if (lower.includes('진도') || lower.includes('점수') || lower.includes('결과')) {
+   495→   495→      return { action: 'progress' };
+   496→   496→    }
+   497→   497→
+   498→   498→    return { action: 'menu' };
+   499→   499→  }
+   500→   500→
+   501→   501→  private async startQuiz(userId: string, difficulty: string): Promise<AgentOutput> {
+   502→   502→    const questions = this.getQuestionsByDifficulty(difficulty as Difficulty, 10);
+   503→   503→    
+   504→   504→    // 세션 시작
+   505→   505→    await this.createQuizSession(userId, questions);
+   506→   506→
+   507→   507→    const firstQuestion = questions[0];
+   508→   508→    
+   509→   509→    return {
+   510→   510→      success: true,
+   511→   511→      result: {
+   512→   512→        type: 'question',
+   513→   513→        question: this.formatQuestion(firstQuestion, 1, 10),
+   514→   514→        progress: { current: 1, total: 10 },
+   515→   515→      },
+   516→   516→      confidence: 1.0,
+   517→   517→    };
+   518→   518→  }
+   519→   519→
+   520→   520→  private formatQuestion(question: QuizQuestion, current: number, total: number): string {
+   521→   521→    const difficultyEmoji = question.difficulty === 'easy' ? '🌱' :
+   522→   522→                          question.difficulty === 'medium' ? '🌿' : '🌳';
+   523→   523→    
+   524→   524→    let formatted = `${difficultyEmoji} 문제 ${current}/${total}\n\n`;
+   525→   525→    formatted += `📝 ${question.question}\n\n`;
+   526→   526→    
+   527→   527→    question.options.forEach((option, idx) => {
+   528→   528→      const nums = ['①', '②', '③', '④'];
+   529→   529→      formatted += `${nums[idx]} ${option}\n`;
+   530→   530→    });
+   531→   531→    
+   532→   532→    formatted += '\n번호를 입력하여 답을 선택하세요!';
+   533→   533→    
+   534→   534→    return formatted;
+   535→   535→  }
+   536→   536→
+   537→   537→  private async submitAnswer(
+   538→   538→    userId: string,
+   539→   539→    questionId: number,
+   540→   540→    answer: number
+   541→   541→  ): Promise<AgentOutput> {
+   542→   542→    const session = await this.getSession(userId);
+   543→   543→    const question = session.questions.find(q => q.id === questionId);
+   544→   544→    
+   545→   545→    if (!question) {
+   546→   546→      return { success: false, message: '문제를 찾을 수 없습니다.', confidence: 1.0 };
+   547→   547→    }
+   548→   548→
+   549→   549→    const isCorrect = answer - 1 === question.correctAnswer;
+   550→   550→    
+   551→   551→    // 답변 저장
+   552→   552→    await this.saveAnswer(userId, questionId, answer, isCorrect);
+   553→   553→
+   554→   554→    // 다음 문제 또는 결과
+   555→   555→    const nextIndex = session.questions.findIndex(q => q.id === questionId) + 1;
+   556→   556→    
+   557→   557→    if (nextIndex >= session.questions.length) {
+   558→   558→      return this.showResults(userId);
+   559→   559→    }
+   560→   560→
+   561→   561→    const nextQuestion = session.questions[nextIndex];
+   562→   562→    
+   563→   563→    return {
+   564→   564→      success: true,
+   565→   565→      result: {
+   566→   566→        type: 'feedback',
+   567→   567→        correct: isCorrect,
+   568→   568→        explanation: isCorrect 
+   569→   569→          ? `✅ 정답입니다! ${question.explanation}` 
+   570→   570→          : `❌ 아쉽게도 오답입니다. ${question.explanation}`,
+   571→   571→        nextQuestion: this.formatQuestion(nextQuestion, nextIndex + 1, session.questions.length),
+   572→   572→      },
+   573→   573→      confidence: 1.0,
+   574→   574→    };
+   575→   575→  }
+   576→   576→
+   577→   577→  private async showResults(userId: string): Promise<AgentOutput> {
+   578→   578→    const session = await this.getSession(userId);
+   579→   579→    const correct = session.answers.filter(a => a.isCorrect).length;
+   580→   580→    const total = session.questions.length;
+   581→   581→    const percentage = Math.round((correct / total) * 100);
+   582→   582→
+   583→   583→    let grade: string;
+   584→   584→    let emoji: string;
+   585→   585→    let message: string;
+   586→   586→
+   587→   587→    if (percentage >= 90) {
+   588→   588→      grade = '우수'; emoji = '🏆'; message = '훌륭해요! AI 전문가 수준입니다!';
+   589→   589→    } else if (percentage >= 70) {
+   590→   590→      grade = '양호'; emoji = '⭐'; message = '잘 하셨어요! 조금만 더 공부하면 완벽해요!';
+   591→   591→    } else if (percentage >= 50) {
+   592→   592→      grade = '보통'; emoji = '👍'; message = '좋은 시작이에요! 계속 학습해보세요!';
+   593→   593→    } else {
+   594→   594→      grade = '노력필요'; emoji = '💪'; message = '처음이니까 괜찮아요! 다시 도전해보세요!';
+   595→   595→    }
+   596→   596→
+   597→   597→    return {
+   598→   598→      success: true,
+   599→   599→      result: {
+   600→   600→        type: 'result',
+   601→   601→        score: `${correct}/${total}`,
+   602→   602→        percentage,
+   603→   603→        grade,
+   604→   604→        emoji,
+   605→   605→        message: `${emoji} ${message}\n\n점수: ${percentage}점 (${grade})`,
+   606→   606→      },
+   607→   607→      confidence: 1.0,
+   608→   608→    };
+   609→   609→  }
+   610→   610→}
+   611→   611→
+   612→   612→2.5 Safety Agent (안전 에이전트)
+   613→   613→// agent/safety-agent.ts
+   614→   614→export class SafetyAgent {
+   615→   615→  // 입력 검증
+   616→   616→  async checkInput(input: string): Promise<SafetyCheckResult> {
+   617→   617→    // 1. 프롬프트 인젝션 탐지
+   618→   618→    if (detectPromptInjection(input)) {
+   619→   619→      return {
+   620→   620→        safe: false,
+   621→   621→        message: '해당 요청은 처리할 수 없습니다.',
+   622→   622→        type: 'prompt_injection',
+   623→   623→      };
+   624→   624→    }
+   625→   625→
+   626→   626→    // 2. 유해 콘텐츠 탐지
+   627→   627→    const harmfulContent = this.detectHarmfulContent(input);
+   628→   628→    if (harmfulContent) {
+   629→   629→      return {
+   630→   630→        safe: false,
+   631→   631→        message: '부적절한 내용이 감지되었습니다.',
+   632→   632→        type: 'harmful_content',
+   633→   633→        details: harmfulContent,
+   634→   634→      };
+   635→   635→    }
+   636→   636→
+   637→   637→    // 3. 개인정보 탐지
+   638→   638→    const pii = this.detectPII(input);
+   639→   639→    if (pii.length > 0) {
+   640→   640→      return {
+   641→   641→        safe: false,
+   642→   642→        message: '개인정보는 입력하지 마세요. 안전하게 보호됩니다.',
+   643→   643→        type: 'pii_detected',
+   644→   644→        details: pii,
+   645→   645→      };
+   646→   646→    }
+   647→   647→
+   648→   648→    return { safe: true };
+   649→   649→  }
+   650→   650→
+   651→   651→  // 출력 검증
+   652→   652→  async checkOutput(output: string): Promise<SafetyCheckResult> {
+   653→   653→    // 1. 유해 출력 필터링
+   654→   654→    const filtered = filterOutput(output);
+   655→   655→    if (!filtered.safe) {
+   656→   656→      return {
+   657→   657→        safe: false,
+   658→   658→        message: '안전하지 않은 출력이 필터링되었습니다.',
+   659→   659→        filtered: filtered.filtered,
+   660→   660→        type: 'output_filtered',
+   661→   661→      };
+   662→   662→    }
+   663→   663→
+   664→   664→    // 2. 환각(Hallucination) 탐지
+   665→   665→    const hallucinationScore = await this.detectHallucination(filtered.filtered);
+   666→   666→    if (hallucinationScore > 0.7) {
+   667→   667→      return {
+   668→   668→        safe: true, // 출력은 안전하나 신뢰도 낮음
+   669→   669→        filtered: filtered.filtered + '\n\n(참고: 이 정보는 확인이 필요할 수 있습니다.)',
+   670→   670→        confidence: 1 - hallucinationScore,
+   671→   671→      };
+   672→   672→    }
+   673→   673→
+   674→   674→    // 3. 시니어 적합성 검증
+   675→   675→    const seniorCheck = this.checkSeniorAppropriateness(filtered.filtered);
+   676→   676→    if (!seniorCheck.appropriate) {
+   677→   677→      return {
+   678→   678→        safe: true,
+   679→   679→        filtered: this.simplifyForSenior(filtered.filtered),
+   680→   680→        type: 'simplified',
+   681→   681→      };
+   682→   682→    }
+   683→   683→
+   684→   684→    return { safe: true, filtered: filtered.filtered };
+   685→   685→  }
+   686→   686→
+   687→   687→  private detectHarmfulContent(text: string): HarmfulContentResult | null {
+   688→   688→    const categories = {
+   689→   689→      violence: /살인|폭력|총|칼|폭탄|테러/gi,
+   690→   690→      selfHarm: /자살|자해|죽고|끝내고/gi,
+   691→   691→      hate: /혐오|차별|인종|장애인비하/gi,
+   692→   692→      sexual: /성적|음란|야한/gi,
+   693→   693→      illegal: /마약|도박|불법/gi,
+   694→   694→    };
+   695→   695→
+   696→   696→    for (const [category, pattern] of Object.entries(categories)) {
+   697→   697→      if (pattern.test(text)) {
+   698→   698→        return { category, confidence: 0.9 };
+   699→   699→      }
+   700→   700→    }
+   701→   701→
+   702→   702→    return null;
+   703→   703→  }
+   704→   704→
+   705→   705→  private detectPII(text: string): PIIFinding[] {
+   706→   706→    const findings: PIIFinding[] = [];
+   707→   707→    
+   708→   708→    // 전화번호
+   709→   709→    const phonePattern = /\d{2,3}-?\d{3,4}-?\d{4}/g;
+   710→   710→    const phones = text.match(phonePattern);
+   711→   711→    if (phones) {
+   712→   712→      findings.push({ type: 'phone', values: phones });
+   713→   713→    }
+   714→   714→
+   715→   715→    // 이메일
+   716→   716→    const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+   717→   717→    const emails = text.match(emailPattern);
+   718→   718→    if (emails) {
+   719→   719→      findings.push({ type: 'email', values: emails });
+   720→   720→    }
+   721→   721→
+   722→   722→    // 주민번호
+   723→   723→    const rrnPattern = /\d{6}-?\d{7}/g;
+   724→   724→    const rrns = text.match(rrnPattern);
+   725→   725→    if (rrns) {
+   726→   726→      findings.push({ type: 'ssn', values: rrns });
+   727→   727→    }
+   728→   728→
+   729→   729→    // 주소
+   730→   730→    const addressPattern = /([가-힣]+)?(시|도)\s+([가-힣]+)?(시|군|구)/g;
+   731→   731→    const addresses = text.match(addressPattern);
+   732→   732→    if (addresses) {
+   733→   733→      findings.push({ type: 'address', values: addresses });
+   734→   734→    }
+   735→   735→
+   736→   736→    return findings;
+   737→   737→  }
+   738→   738→
+   739→   739→  private async detectHallucination(text: string): Promise<number> {
+   740→   740→    // 사실 기반 검증
+   741→   741→    // 실제 구현에서는 외부 사실 검증 API 사용
+   742→   742→    // 여기서는 단순 휴리스틱 사용
+   743→   743→    
+   744→   744→    const uncertaintyPhrases = [
+   745→   745→      '아마도', '것 같습니다', '추정됩니다', '정확하지 않지만',
+   746→   746→    ];
+   747→   747→    
+   748→   748→    const uncertaintyCount = uncertaintyPhrases.filter(p => text.includes(p)).length;
+   749→   749→    return Math.min(uncertaintyCount * 0.3, 1.0);
+   750→   750→  }
+   751→   751→
+   752→   752→  private checkSeniorAppropriateness(text: string): { appropriate: boolean; issues: string[] } {
+   753→   753→    const issues: string[] = [];
+   754→   754→
+   755→   755→    // 문장 길이 체크
+   756→   756→    const sentences = text.split(/[.!?]/).filter(s => s.trim());
+   757→   757→    const longSentences = sentences.filter(s => s.length > 80);
+   758→   758→    if (longSentences.length > 0) {
+   759→   759→      issues.push('too_long_sentences');
+   760→   760→    }
+   761→   761→
+   762→   762→    // 어려운 단어 체크
+   763→   763→    const complexWords = [
+   764→   764→      '알고리즘', '뉴럴네트워크', '파라미터', '그래디언트',
+   765→   765→      '백프로파게이션', '옵티마이저', '에포크', '임베딩',
+   766→   766→    ];
+   767→   767→    const foundComplex = complexWords.filter(w => text.includes(w));
+   768→   768→    if (foundComplex.length > 2) {
+   769→   769→      issues.push('too_complex');
+   770→   770→    }
+   771→   771→
+   772→   772→    return { appropriate: issues.length === 0, issues };
+   773→   773→  }
+   774→   774→
+   775→   775→  private simplifyForSenior(text: string): string {
+   776→   776→    // 문장 분할
+   777→   777→    let simplified = text;
+   778→   778→    
+   779→   779→    // 긴 문장을 짧은 문장으로
+   780→   780→    simplified = simplified.replace(/(.{60,}?)[.!?]/g, '$1.\n');
+   781→   781→    
+   782→   782→    // 어려운 단어 → 쉬운 단어
+   783→   783→    const replacements: Record<string, string> = {
+   784→   784→      '알고리즘': '처리 방법',
+   785→   785→      '뉴럴네트워크': '뇌를 본뜬 구조',
+   786→   786→      '파라미터': '설정값',
+   787→   787→      '인공지능': 'AI(생각하는 컴퓨터)',
+   788→   788→    };
+   789→   789→
+   790→   790→    for (const [complex, simple] of Object.entries(replacements)) {
+   791→   791→      simplified = simplified.replace(new RegExp(complex, 'g'), simple);
+   792→   792→    }
+   793→   793→
+   794→   794→    return simplified;
+   795→   795→  }
+   796→   796→}
+   797→   797→
+   798→   798→2.6 Orchestrator Agent (오케스트레이터)
+   799→   799→// agent/orchestrator.ts
+   800→   800→export class OrchestratorAgent {
+   801→   801→  private agents: Map<string, Agent>;
+   802→   802→  private router: IntentRouter;
+   803→   803→  private memoryManager: MemoryManager;
+   804→   804→
+   805→   805→  constructor() {
+   806→   806→    this.agents = new Map();
+   807→   807→    this.registerAgents();
+   808→   808→    this.router = new IntentRouter();
+   809→   809→    this.memoryManager = new MemoryManager();
+   810→   810→  }
+   811→   811→
+   812→   812→  private registerAgents() {
+   813→   813→    this.agents.set('chat', new ChatAgent());
+   814→   814→    this.agents.set('image', new ImageAgent());
+   815→   815→    this.agents.set('future', new FutureSelfAgent());
+   816→   816→    this.agents.set('quiz', new QuizAgent());
+   817→   817→    this.agents.set('prompt', new PromptLearningAgent());
+   818→   818→    this.agents.set('safety', new SafetyAgent());
+   819→   819→  }
+   820→   820→
+   821→   821→  async handleRequest(input: AgentInput): Promise<AgentOutput> {
+   822→   822→    // 1. 의도 분류
+   823→   823→    const intent = await this.router.classify(input.message, input.context);
+   824→   824→
+   825→   825→    // 2. 적절한 에이전트 선택
+   826→   826→    const agent = this.selectAgent(intent, input);
+   827→   827→
+   828→   828→    if (!agent) {
+   829→   829→      return {
+   830→   830→        success: false,
+   831→   831→        message: '어떤 기능을 사용하시겠어요?\n\n💬 AI와 대화하기\n🖼️ 이미지 변환하기\n👤 미래 모습 보기\n📝 퀴즈 풀기\n📚 프롬프트 배우기',
+   832→   832→        confidence: 0.5,
+   833→   833→      };
+   834→   834→    }
+   835→   835→
+   836→   836→    // 3. 에이전트 실행
+   837→   837→    try {
+   838→   838→      const result = await agent.execute(input);
+   839→   839→      
+   840→   840→      // 4. 결과 로깅
+   841→   841→      await this.logInteraction(input.userId, intent, result);
+   842→   842→      
+   843→   843→      return result;
+   844→   844→    } catch (error) {
+   845→   845→      console.error(`Agent execution error:`, error);
+   846→   846→      return {
+   847→   847→        success: false,
+   848→   848→        message: '처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.',
+   849→   849→        confidence: 0,
+   850→   850→      };
+   851→   851→    }
+   852→   852→  }
+   853→   853→
+   854→   854→  private selectAgent(intent: IntentClassification, input: AgentInput): Agent | null {
+   855→   855→    // 첨부파일이 있으면 이미지 관련 에이전트
+   856→   856→    if (input.attachments?.length) {
+   857→   857→      if (intent.category === 'future_self') {
+   858→   858→        return this.agents.get('future')!;
+   859→   859→      }
+   860→   860→      return this.agents.get('image')!;
+   861→   861→    }
+   862→   862→
+   863→   863→    // 의도 기반 선택
+   864→   864→    const agentMap: Record<string, string> = {
+   865→   865→      'chat': 'chat',
+   866→   866→      'greeting': 'chat',
+   867→   867→      'question': 'chat',
+   868→   868→      'image_transform': 'image',
+   869→   869→      'image_generate': 'image',
+   870→   870→      'future_self': 'future',
+   871→   871→      'quiz_start': 'quiz',
+   872→   872→      'quiz_answer': 'quiz',
+   873→   873→      'prompt_learn': 'prompt',
+   874→   874→      'help': 'chat',
+   875→   875→    };
+   876→   876→
+   877→   877→    const agentName = agentMap[intent.category];
+   878→   878→    return agentName ? this.agents.get(agentName)! : this.agents.get('chat')!;
+   879→   879→  }
+   880→   880→}
+   881→   881→
+   882→   882→// 의도 분류기
+   883→   883→class IntentRouter {
+   884→   884→  async classify(message: string, context?: Message[]): Promise<IntentClassification> {
+   885→   885→    const lower = message.toLowerCase().trim();
+   886→   886→
+   887→   887→    // 키워드 기반 분류 (빠른 응답)
+   888→   888→    const categories: Record<string, string[]> = {
+   889→   889→      greeting: ['안녕', '하이', '반가', '좋은아침', 'hello', 'hi'],
+   890→   890→      image_transform: ['사진', '이미지', '그림', '변환', '바꿔', '스타일'],
+   891→   891→      future_self: ['미래', '나이', '늙', '앞으로', 'predict'],
+   892→   892→      quiz_start: ['퀴즈', '문제', '시험', '풀'],
+   893→   893→      quiz_answer: ['1', '2', '3', '4', '①', '②', '③', '④'],
+   894→   894→      prompt_learn: ['프롬프트', '명령어', '어떻게물어', 'tip', '팁'],
+   895→   895→      help: ['도움', '헬프', '어떻게', '사용법', 'help'],
+   896→   896→      settings: ['설정', '글씨', '크기', '소리', 'accessibility'],
+   897→   897→    };
+   898→   898→
+   899→   899→    for (const [category, keywords] of Object.entries(categories)) {
+   900→   900→      if (keywords.some(kw => lower.includes(kw))) {
+   901→   901→        return { category, confidence: 0.85 };
+   902→   902→      }
+   903→   903→    }
+   904→   904→
+   905→   905→    // AI 기반 분류 (더 정확)
+   906→   906→    const aiClassification = await this.classifyWithAI(message, context);
+   907→   907→    return aiClassification;
+   908→   908→  }
+   909→   909→
+   910→   910→  private async classifyWithAI(message: string, context?: Message[]): Promise<IntentClassification> {
+   911→   911→    const provider = AIProviderFactory.create('chat');
+   912→   912→    
+   913→   913→    const response = await provider.chat(
+   914→   914→      `다음 사용자 메시지의 의도를 분류하세요:
+   915→   915→      
+   916→   916→메시지: "${message}"
+   917→   917→컨텍스트: ${context?.slice(-3).map(m => m.role + ': ' + m.content).join('\n') || '없음'}
+   918→   918→
+   919→   919→카테고리: chat, image_transform, future_self, quiz_start, quiz_answer, prompt_learn, help, settings
+   920→   920→
+   921→   921→JSON 형식으로만 응답: {"category": "...", "confidence": 0.0~1.0}`,
+   922→   922→      {
+   923→   923→        system: '의도 분류 전문가입니다. 항상 JSON 형식으로 응답하세요.',
+   924→   924→        temperature: 0.3,
+   925→   925→        maxTokens: 100,
+   926→   926→      }
+   927→   927→    );
+   928→   928→
+   929→   929→    try {
+   930→   930→      const parsed = JSON.parse(response);
+   931→   931→      return { category: parsed.category, confidence: parsed.confidence || 0.7 };
+   932→   932→    } catch {
+   933→   933→      return { category: 'chat', confidence: 0.5 };
+   934→   934→    }
+   935→   935→  }
+   936→   936→}
+   937→   937→
+   938→   938→3. Agent 협업 패턴
+   939→   939→3.1 파이프라인 패턴
+   940→   940→// 에이전트 파이프라인
+   941→   941→export class AgentPipeline {
+   942→   942→  private agents: Agent[] = [];
+   943→   943→
+   944→   944→  add(agent: Agent): AgentPipeline {
+   945→   945→    this.agents.push(agent);
+   946→   946→    return this;
+   947→   947→  }
+   948→   948→
+   949→   949→  async execute(input: AgentInput): Promise<AgentOutput> {
+   950→   950→    let currentInput = input;
+   951→   951→    let finalResult: AgentOutput | null = null;
+   952→   952→
+   953→   953→    for (const agent of this.agents) {
+   954→   954→      if (agent.canHandle(currentInput)) {
+   955→   955→        finalResult = await agent.execute(currentInput);
+   956→   956→        
+   957→   957→        if (!finalResult.success) {
+   958→   958→          return finalResult; // 실패 시 중단
+   959→   959→        }
+   960→   960→
+   961→   961→        // 다음 에이전트를 위한 입력 변환
+   962→   962→        currentInput = this.transformForNextAgent(currentInput, finalResult);
+   963→   963→      }
+   964→   964→    }
+   965→   965→
+   966→   966→    return finalResult || { success: false, message: '처리할 수 있는 에이전트가 없습니다.', confidence: 0 };
+   967→   967→  }
+   968→   968→
+   969→   969→  private transformForNextAgent(input: AgentInput, result: AgentOutput): AgentInput {
+   970→   970→    return {
+   971→   971→      ...input,
+   972→   972→      context: [...(input.context || []), {
+   973→   973→        role: 'assistant',
+   974→   974→        content: typeof result.result === 'string' ? result.result : JSON.stringify(result.result),
+   975→   975→      }],
+   976→   976→    };
+   977→   977→  }
+   978→   978→}
+   979→   979→
+   980→   980→// 사용 예시
+   981→   981→const imagePipeline = new AgentPipeline()
+   982→   982→  .add(new SafetyAgent())      // 안전 검증
+   983→   983→  .add(new ImageAgent())       // 이미지 처리
+   984→   984→  .add(new ChatAgent());       // 결과 설명
+   985→   985→
+   986→   986→3.2 메모리 관리
+   987→   987→// agent/memory.ts
+   988→   988→export class MemoryManager {
+   989→   989→  private shortTermMemory: Map<string, Message[]> = new Map();
+   990→   990→  private longTermMemory: LongTermStorage;
+   991→   991→
+   992→   992→  constructor() {
+   993→   993→    this.longTermMemory = new LongTermStorage();
+   994→   994→  }
+   995→   995→
+   996→   996→  async saveMessage(userId: string, role: string, content: string) {
+   997→   997→    const message: Message = {
+   998→   998→      role: role as 'user' | 'assistant',
+   999→   999→      content,
+  1000→  1000→      timestamp: Date.now(),
+  1001→  1001→    };
+  1002→  1002→
+  1003→  1003→    // 단기 메모리에 저장 (최근 50개)
+  1004→  1004→    const userMemory = this.shortTermMemory.get(userId) || [];
+  1005→  1005→    userMemory.push(message);
+  1006→  1006→    if (userMemory.length > 50) {
+  1007→  1007→      userMemory.shift();
+  1008→  1008→    }
+  1009→  1009→    this.shortTermMemory.set(userId, userMemory);
+  1010→  1010→
+  1011→  1011→    // 중요 정보는 장기 메모리에 저장
+  1012→  1012→    const importance = await this.assessImportance(content);
+  1013→  1013→    if (importance > 0.7) {
+  1014→  1014→      await this.longTermMemory.save(userId, message, importance);
+  1015→  1015→    }
+  1016→  1016→  }
+  1017→  1017→
+  1018→  1018→  async getRelevantContext(userId: string, query: string, limit: number = 5): Promise<Message[]> {
+  1019→  1019→    const shortTerm = this.shortTermMemory.get(userId) || [];
+  1020→  1020→    
+  1021→  1021→    // 관련성 기반 정렬
+  1022→  1022→    const scored = shortTerm.map(msg => ({
+  1023→  1023→      ...msg,
+  1024→  1024→      relevance: this.calculateRelevance(query, msg.content),
+  1025→  1025→    }));
+  1026→  1026→
+  1027→  1027→    scored.sort((a, b) => b.relevance - a.relevance);
+  1028→  1028→    
+  1029→  1029→    // 상위 N개 + 최근 메시지 혼합
+  1030→  1030→    const relevant = scored.slice(0, Math.ceil(limit / 2));
+  1031→  1031→    const recent = shortTerm.slice(-Math.floor(limit / 2));
+  1032→  1032→    
+  1033→  1033→    return [...new Set([...relevant, ...recent])].sort((a, b) => a.timestamp - b.timestamp);
+  1034→  1034→  }
+  1035→  1035→
+  1036→  1036→  private calculateRelevance(query: string, content: string): number {
+  1037→  1037→    const queryWords = query.toLowerCase().split(/\s+/);
+  1038→  1038→    const contentWords = content.toLowerCase().split(/\s+/);
+  1039→  1039→    
+  1040→  1040→    const overlap = queryWords.filter(w => contentWords.includes(w)).length;
+  1041→  1041→    return overlap / queryWords.length;
+  1042→  1042→  }
+  1043→  1043→
+  1044→  1044→  private async assessImportance(content: string): Promise<number> {
+  1045→  1045→    const importantPatterns = [
+  1046→  1046→      /이름|나이|주소|전화|이메일/gi,    // 개인정보
+  1047→  1047→      /좋아|싫어|관심/gi,              // 선호도
+  1048→  1048→      /배우|공부|학습/gi,              // 학습 의지
+  1049→  1049→      /문제|어려움|도움/gi,            // 도움 요청
+  1050→  1050→    ];
+  1051→  1051→
+  1052→  1052→    let score = 0;
+  1053→  1053→    for (const pattern of importantPatterns) {
+  1054→  1054→      if (pattern.test(content)) score += 0.3;
+  1055→  1055→    }
+  1056→  1056→    
+  1057→  1057→    return Math.min(score, 1.0);
+  1058→  1058→  }
+  1059→  1059→}
+  1060→  1060→
+  1061→  1061→4. Agent 모니터링 및 최적화
+  1062→  1062→4.1 Agent 성능 지표
+  1063→  1063→// agent/metrics.ts
+  1064→  1064→export interface AgentMetrics {
+  1065→  1065→  totalRequests: number;
+  1066→  1066→  successRate: number;
+  1067→  1067→  averageResponseTime: number;
+  1068→  1068→  errorRate: number;
+  1069→  1069→  userSatisfaction: number;
+  1070→  1070→  tokenUsage: number;
+  1071→  1071→}
+  1072→  1072→
+  1073→  1073→export class AgentMetricsCollector {
+  1074→  1074→  private metrics: Map<string, AgentMetrics> = new Map();
+  1075→  1075→
+  1076→  1076→  record(agentName: string, result: AgentOutput, responseTime: number) {
+  1077→  1077→    const current = this.metrics.get(agentName) || {
+  1078→  1078→      totalRequests: 0,
+  1079→  1079→      successRate: 0,
+  1080→  1080→      averageResponseTime: 0,
+  1081→  1081→      errorRate: 0,
+  1082→  1082→      userSatisfaction: 0,
+  1083→  1083→      tokenUsage: 0,
+  1084→  1084→    };
+  1085→  1085→
+  1086→  1086→    current.totalRequests++;
+  1087→  1087→    current.successRate = (
+  1088→  1088→      (current.successRate * (current.totalRequests - 1) + (result.success ? 100 : 0))
+  1089→  1089→      / current.totalRequests
+  1090→  1090→    );
+  1091→  1091→    current.averageResponseTime = (
+  1092→  1092→      (current.averageResponseTime * (current.totalRequests - 1) + responseTime)
+  1093→  1093→      / current.totalRequests
+  1094→  1094→    );
+  1095→  1095→    current.tokenUsage += (result.metadata?.tokensUsed as number) || 0;
+  1096→  1096→
+  1097→  1097→    this.metrics.set(agentName, current);
+  1098→  1098→  }
+  1099→  1099→
+  1100→  1100→  getReport(): AgentMetricsReport {
+  1101→  1101→    const report: AgentMetricsReport = { agents: {} };
+  1102→  1102→    
+  1103→  1103→    for (const [name, metrics] of this.metrics) {
+  1104→  1104→      report.agents[name] = metrics;
+  1105→  1105→    }
+  1106→  1106→    
+  1107→  1107→    report.summary = {
+  1108→  1108→      totalRequests: [...this.metrics.values()].reduce((sum, m) => sum + m.totalRequests, 0),
+  1109→  1109→      overallSuccessRate: [...this.metrics.values()].reduce((sum, m) => sum + m.successRate, 0) / this.metrics.size,
+  1110→  1110→      totalTokenUsage: [...this.metrics.values()].reduce((sum, m) => sum + m.tokenUsage, 0),
+  1111→  1111→    };
+  1112→  1112→
+  1113→  1113→    return report;
+  1114→  1114→  }
+  1115→  1115→
+  1116→  1116→  // 비정상 탐지
+  1117→  1117→  detectAnomalies(): Anomaly[] {
+  1118→  1118→    const anomalies: Anomaly[] = [];
+  1119→  1119→
+  1120→  1120→    for (const [name, metrics] of this.metrics) {
+  1121→  1121→      if (metrics.successRate < 70) {
+  1122→  1122→        anomalies.push({
+  1123→  1123→          agent: name,
+  1124→  1124→          type: 'low_success_rate',
+  1125→  1125→          value: metrics.successRate,
+  1126→  1126→          threshold: 70,
+  1127→  1127→        });
+  1128→  1128→      }
+  1129→  1129→      if (metrics.averageResponseTime > 10000) { // 10초 초과
+  1130→  1130→        anomalies.push({
+  1131→  1131→          agent: name,
+  1132→  1132→          type: 'slow_response',
+  1133→  1133→          value: metrics.averageResponseTime,
+  1134→  1134→          threshold: 10000,
+  1135→  1135→        });
+  1136→  1136→      }
+  1137→  1137→    }
+  1138→  1138→
+  1139→  1139→    return anomalies;
+  1140→  1140→  }
+  1141→  1141→}
+  1142→  1142→
+  1143→  1143→4.2 A/B 테스트 프레임워크
+  1144→  1144→// agent/ab-testing.ts
+  1145→  1145→export class AgentABTesting {
+  1146→  1146→  private experiments: Map<string, ABExperiment> = new Map();
+  1147→  1147→
+  1148→  1148→  async runExperiment(
+  1149→  1149→    name: string,
+  1150→  1150→    input: AgentInput,
+  1151→  1151→    variantA: Agent,
+  1152→  1152→    variantB: Agent
+  1153→  1153→  ): Promise<ABResult> {
+  1154→  1154→    // 50/50 분배
+  1155→  1155→    const variant = Math.random() < 0.5 ? 'A' : 'B';
+  1156→  1156→    const agent = variant === 'A' ? variantA : variantB;
+  1157→  1157→
+  1158→  1158→    const startTime = Date.now();
+  1159→  1159→    const result = await agent.execute(input);
+  1160→  1160→    const responseTime = Date.now() - startTime;
+  1161→  1161→
+  1162→  1162→    // 결과 기록
+  1163→  1163→    await this.recordResult(name, variant, result, responseTime);
+  1164→  1164→
+  1165→  1165→    return {
+  1166→  1166→      variant,
+  1167→  1167→      result,
+  1168→  1168→      responseTime,
+  1169→  1169→    };
+  1170→  1170→  }
+  1171→  1171→
+  1172→  1172→  async getExperimentResults(name: string): Promise<ExperimentReport> {
+  1173→  1173→    const results = await this.getResults(name);
+  1174→  1174→    
+  1175→  1175→    const variantAResults = results.filter(r => r.variant === 'A');
+  1176→  1176→    const variantBResults = results.filter(r => r.variant === 'B');
+  1177→  1177→
+  1178→  1178→    return {
+  1179→  1179→      name,
+  1180→  1180→      variantA: this.calculateStats(variantAResults),
+  1181→  1181→      variantB: this.calculateStats(variantBResults),
+  1182→  1182→      winner: this.determineWinner(variantAResults, variantBResults),
+  1183→  1183→      confidence: this.calculateConfidence(variantAResults, variantBResults),
+  1184→  1184→    };
+  1185→  1185→  }
+  1186→  1186→}
+  1187→  1187→
+  1188→  1188→5. Agent 보안
+  1189→  1189→5.1 Agent 권한 관리
+  1190→  1190→
+  1191→  1191→// agent/permissions.ts
+  1192→  1192→export interface AgentPermissions {
+  1193→  1193→  canReadUserData: boolean;
+  1194→  1194→  canWriteUserData: boolean;
+  1195→  1195→  canAccessExternalAPIs: boolean;
+  1196→  1196→  canExecuteCode: boolean;
+  1197→  1197→  canAccessFileSystem: boolean;
+  1198→  1198→  maxTokenUsage: number;
+  1199→  1199→  allowedActions: string[];
+  1200→  1200→}
+  1201→  1201→
+  1202→  1202→export const AGENT_PERMISSIONS: Record<string, AgentPermissions> = {
+  1203→  1203→  ChatAgent: {
+  1204→  1204→    canReadUserData: true,
+  1205→  1205→    canWriteUserData: true,    // 대화 기록
+  1206→  1206→    canAccessExternalAPIs: true, // LLM API
+  1207→  1207→    canExecuteCode: false,
+  1208→  1208→    canAccessFileSystem: false,
+  1209→  1209→    maxTokenUsage: 1000,
+  1210→  1210→    allowedActions: ['chat', 'explain', 'summarize'],
+  1211→  1211→  },
+  1212→  1212→  ImageAgent: {
+  1213→  1213→    canReadUserData: true,
+  1214→  1214→    canWriteUserData: true,    // 이미지 기록
+  1215→  1215→    canAccessExternalAPIs: true, // 이미지 AI
+  1216→  1216→    canExecuteCode: false,
+  1217→  1217→    canAccessFileSystem: false, // S3만 접근
+  1218→  1218→    maxTokenUsage: 5000,
+  1219→  1219→    allowedActions: ['transform', 'generate', 'describe'],
+  1220→  1220→  },
+  1221→  1221→  SafetyAgent: {
+  1222→  1222→    canReadUserData: true,
+  1223→  1223→    canWriteUserData: true,    // 로그
+  1224→  1224→    canAccessExternalAPIs: true, // 필터 API
+  1225→  1225→    canExecuteCode: false,
+  1226→  1226→    canAccessFileSystem: false,
+  1227→  1227→    maxTokenUsage: 500,
+  1228→  1228→    allowedActions: ['check', 'filter', 'flag'],
+  1229→  1229→  },
+  1230→  1230→};
+  1231→  1231→
+  1232→  1232→export class AgentSecurityManager {
+  1233→  1233→  static checkPermission(agentName: string, action: string): boolean {
+  1234→  1234→    const permissions = AGENT_PERMISSIONS[agentName];
+  1235→  1235→    if (!permissions) return false;
+  1236→  1236→    return permissions.allowedActions.includes(action);
+  1237→  1237→  }
+  1238→  1238→
+  1239→  1239→  static enforceTokenLimit(agentName: string, tokensUsed: number): boolean {
+  1240→  1240→    const permissions = AGENT_PERMISSIONS[agentName];
+  1241→  1241→    if (!permissions) return false;
+  1242→  1242→    return tokensUsed <= permissions.maxTokenUsage;
+  1243→  1243→  }
+  1244→  1244→}
+  1245→  1245→
+  1246→  1246→
+  1247→  1247→
