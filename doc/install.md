@@ -52,11 +52,14 @@ git pull
 
 ## 4. 환경 변수 (`.env`)
 
+> **권장 배포는 Docker Compose 방식이다** (`doc/docker.md` 참조 — PostgreSQL 포함).
+> 아래는 CloudPanel 직접(비-Docker) 배포 시 예시이다.
+
 사이트 경로에 `.env` 생성:
 
 ```env
-# SQLite 파일 경로 (사이트 경로 기준 상대경로 권장)
-DATABASE_URL=file:./db/custom.db
+# PostgreSQL 접속 정보
+DATABASE_URL=postgresql://aiplatform:aiplatform@localhost:5432/aiplatform
 
 # 공개 사이트 URL (메타데이터/OG 이미지 기준 URL)
 NEXT_PUBLIC_SITE_URL=https://rustkorea.cloud
@@ -68,14 +71,25 @@ GROK_API_KEY=
 CLAUDE_API_KEY=
 DEFAULT_AI_PROVIDER=zai-built-in
 
-# PWA 푸시 알림 (선택)
+# PWA 푸시 알림 (선택 — 관리자 푸시 메뉴에서도 설정 가능)
 # NEXT_PUBLIC_VAPID_PUBLIC_KEY=
 # VAPID_PRIVATE_KEY=
+
+# API 키·TOTP 시크릿 암호화 키 (프로덕션 필수, 16자 이상 임의 문자열)
+API_KEY_SECRET=
+
+# 감사 로그 보존 기간(일, 30 이상, 기본 365)
+AUDIT_RETENTION_DAYS=365
+
+# OIDC SSO (선택, 모두 설정 시 관리자 로그인에 SSO 버튼 표시)
+OIDC_ISSUER=
+OIDC_CLIENT_ID=
+OIDC_CLIENT_SECRET=
 ```
 
 > 개발용 기본 계정(`admin@aiplatform.kr` / `admin123`)으로
-> `https://rustkorea.cloud/admin`에 로그인 후
-> 사용자 관리에서 반드시 비밀번호를 변경한다.
+> `https://rustkorea.cloud/admin`에 로그인한다. 초기 비밀번호이므로
+> 첫 로그인 시 변경 화면이 강제 표시된다.
 > (관리자 진입점은 프론트에 노출되지 않으며, `/admin` 직접 접속만 허용된다.)
 
 ---
@@ -177,10 +191,10 @@ pm2 restart aiplatform   # 또는 CloudPanel 사이트 화면에서 Restart
 
 | 경로 | 용도 | 백업 |
 |---|---|---|
-| `db/custom.db` | SQLite 전체 데이터 (콘텐츠·사용자·감사로그) | 필수 |
-| `public/uploads/` | 관리자 업로드 이미지 (`/uploads/*` URL 서빙) | 권장 |
+| PostgreSQL 볼륨 (`pgdata`) | 전체 데이터 (콘텐츠·사용자·감사로그) | 자동 (backup 서비스 일간 + 7일 보관) |
+| `backups` 볼륨 | `pg_dump` 일간 백업본 | 별도 보관 권장 |
+| `uploads` 볼륨 (`public/uploads/`) | 관리자 업로드 이미지 + 서버 TTS 캐시 | 권장 |
 | `.env` | 환경 변수 | 권장 (키는 별도 보관) |
-| `.next/` | 빌드 산출물 (재생성 가능) | 불필요 |
 
 ---
 
@@ -200,9 +214,10 @@ pm2 restart aiplatform   # 또는 CloudPanel 사이트 화면에서 Restart
 
 ## 11. 보안 메모
 
-- 초기 관리자 비밀번호(`admin123`)는 설치 직후 변경한다.
-- 로그인 10회/분/IP 초과 시 429, 5회 실패 시 15분 잠금이 적용된다.
+- 초기 관리자 비밀번호는 첫 로그인 시 변경이 강제된다 (8자 이상, 영문+숫자).
+- 내 계정 보안 메뉴에서 2단계 인증(TOTP) 등록 가능. SSO(OIDC)도 환경변수로 연동 가능.
+- 로그인 10회/분/IP 초과 시 429, 5회 실패 시 15분 잠금이 적용된다. 신규 IP 로그인은 superadmin에게 알림 생성.
+- 세션은 HttpOnly 쿠키(`admin_session`) + Bearer 토큰 병행. XSS로 localStorage 토큰이 탈취돼도 쿠키 세션은 별도 관리.
 - 관리자 API는 200회/분/토큰 제한 + RBAC(4역할 × 9권한)이 적용된다.
-- CMS 입력값은 키 형식·타입별 스킴·XSS 패턴이 서버에서 검증된다.
-- 이미지 업로드는 JPG/PNG/WebP + 매직바이트 검사, SVG/GIF는 차단된다.
-- 향후 강화 예정: API 키 암호화 저장, HttpOnly 쿠키 전환, Redis 세션 (로드맵 v2.2~v3.0)
+- AI API 키·TOTP 시크릿·VAPID 비공개키는 AES-256-GCM 암호화 저장 (`API_KEY_SECRET` 필수).
+- CSP/X-Frame-Options 등 보안 헤더 적용. 감사 로그는 `AUDIT_RETENTION_DAYS`(기본 365일) 초과분 자동 정리.

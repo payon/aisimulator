@@ -67,6 +67,7 @@ async function main() {
       passwordHash,
       role: 'superadmin',
       isActive: true,
+      mustChangePassword: true, // 초기 비밀번호이므로 첫 로그인 시 변경 강제
     },
   })
   console.log('✅ 관리자 계정 생성 완료 (admin@aiplatform.kr / admin123)')
@@ -141,6 +142,13 @@ async function main() {
     { key: 'home.feature.quiz.description', category: 'home', type: 'text', value: '초급/중급/고급 난이도로 AI 지식을 테스트하세요', label: '퀴즈 카드 설명', description: '', sortOrder: 12 },
     { key: 'home.feature.settings.title', category: 'home', type: 'text', value: '설정', label: '설정 카드 제목', description: '', sortOrder: 13 },
     { key: 'home.feature.settings.description', category: 'home', type: 'text', value: 'OpenAI, Gemini, Grok, Claude API 키를 설정하세요', label: '설정 카드 설명', description: '', sortOrder: 14 },
+
+    // 영어 번역 예시 (언어를 English로 바꾸면 표시)
+    { key: 'en.home.hero.title', category: 'home', type: 'text', value: 'AI Platform', label: '[EN] 히어로 제목', description: '', sortOrder: 101 },
+    { key: 'en.home.hero.description', category: 'home', type: 'text', value: 'Chat with AI, transform images, and meet your future self.', label: '[EN] 히어로 설명', description: '', sortOrder: 102 },
+    { key: 'en.nav.home.label', category: 'nav', type: 'text', value: 'Home', label: '[EN] 홈 탭 라벨', description: '', sortOrder: 101 },
+    { key: 'en.nav.chat.label', category: 'nav', type: 'text', value: 'Chat', label: '[EN] 채팅 탭 라벨', description: '', sortOrder: 102 },
+    { key: 'en.chat.welcome', category: 'chat', type: 'text', value: 'Hello! I am your AI tutor. Ask me anything!', label: '[EN] 웰컴 메시지', description: '', sortOrder: 101 },
   ]
 
   for (const c of contents) {

@@ -3,6 +3,8 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { callImageEdit } from '@/lib/ai-provider';
 import { validateImageDataUrl } from '@/lib/cms-validate';
 import { isMockMode, getMockImageMessageFromDB, getMockImageResultFromDB } from '@/lib/mock-data';
+import { trackActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,6 +41,7 @@ export async function POST(request: NextRequest) {
     // ===== Mock 모드 확인 (DB 기반 데이터 우선) =====
     const mockMode = await isMockMode();
     if (mockMode) {
+      trackActivity('image_transform', 'image', { style, mockMode: true });
       const [mockMessage, preset] = await Promise.all([
         getMockImageMessageFromDB(),
         getMockImageResultFromDB(style),
@@ -76,6 +79,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    trackActivity('image_transform', 'image', { style, mockMode: false });
     return NextResponse.json({
       success: true,
       transformedImage,
@@ -83,7 +87,7 @@ export async function POST(request: NextRequest) {
       mockMode: false,
     });
   } catch (error) {
-    console.error('Image API error:', error);
+    logger.error('Image API error:', error);
     return NextResponse.json(
       { success: false, error: '이미지 처리 중 오류가 발생했습니다.' },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateRequest, hasPermission } from '@/lib/admin-auth';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger'
 
 // ============================================
 // POST - 목업 데이터 초기화 (DB 항목 삭제 → 기본값 복원)
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
       message: `${result.count}개의 목업 데이터 항목이 삭제되어 기본값으로 복원됩니다.`,
     });
   } catch (error) {
-    console.error('Mock data reset error:', error);
+    logger.error('Mock data reset error:', error);
     return NextResponse.json(
       { error: '목업 데이터 초기화 중 오류가 발생했습니다.' },
       { status: 500 }

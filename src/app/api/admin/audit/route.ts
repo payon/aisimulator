@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { authenticateRequest, hasPermission } from '@/lib/admin-auth'
+import { logger } from '@/lib/logger'
 
 /** GET - List audit logs with pagination */
 export async function GET(request: NextRequest) {
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Audit logs error:', error)
+    logger.error('Audit logs error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

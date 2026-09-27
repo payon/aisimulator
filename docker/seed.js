@@ -1,5 +1,6 @@
 // 최초 기동 시 1회 시드 (관리자/권한/사이트설정). 이미 데이터가 있으면 skip.
 // CMS 콘텐츠는 프론트 fallback이 있어 필수가 아니므로 건드리지 않는다.
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
@@ -29,6 +30,7 @@ async function main() {
         passwordHash,
         role: 'superadmin',
         isActive: true,
+        mustChangePassword: true, // 초기 비밀번호이므로 첫 로그인 시 변경 강제
       },
     });
     await db.siteConfig.upsert({ where: { id: 'default' }, update: {}, create: { id: 'default' } });

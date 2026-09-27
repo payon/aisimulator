@@ -15,6 +15,7 @@ import {
   Check,
   X,
   ExternalLink,
+  Tent,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -23,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { usePWA } from '@/hooks/use-pwa';
+import { precacheExhibition } from '@/lib/exhibition';
 
 // === PWA 설정 패널 (설정 탭 내부에 임베드) ===
 export function PWASettingsPanel() {
@@ -45,6 +47,8 @@ export function PWASettingsPanel() {
   const [installing, setInstalling] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [precaching, setPrecaching] = useState(false);
+  const [precacheStatus, setPrecacheStatus] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [showPermissionInfo, setShowPermissionInfo] = useState(false);
 
@@ -86,6 +90,22 @@ export function PWASettingsPanel() {
     await clearCache();
     setCacheSize(0);
     setClearing(false);
+  };
+
+  const handlePrecache = async () => {
+    setPrecaching(true);
+    setPrecacheStatus(null);
+    try {
+      const r = await precacheExhibition((p) => {
+        setPrecacheStatus(`${p.done}/${p.total} 저장 중...`);
+      });
+      setPrecacheStatus(`완료: ${r.total}개 리소스 오프라인 준비됨`);
+      getCacheSize().then(setCacheSize);
+    } catch {
+      setPrecacheStatus('일부 리소스 저장에 실패했습니다.');
+    } finally {
+      setPrecaching(false);
+    }
   };
 
   const handlePushToggle = async () => {
@@ -252,6 +272,25 @@ export function PWASettingsPanel() {
           <Trash2 className="w-3.5 h-3.5" />
           {clearing ? '삭제 중...' : '캐시 전체 삭제'}
         </Button>
+      </Card>
+
+      {/* 전시 모드 (오프라인 준비) */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Tent className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold text-sm">전시 모드 (오프라인 준비)</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          인터넷이 없는 전시장에서도 동작하도록 홈·CMS·아이콘·체험 결과 이미지를 미리 저장합니다.
+          온라인 상태에서 한 번 실행하세요.
+        </p>
+        <Button onClick={handlePrecache} disabled={precaching} className="w-full gap-2">
+          <Download className={`w-4 h-4 ${precaching ? 'animate-bounce' : ''}`} />
+          {precaching ? '저장 중...' : '오프라인 리소스 미리 저장'}
+        </Button>
+        {precacheStatus && (
+          <p className="text-xs text-muted-foreground mt-2">{precacheStatus}</p>
+        )}
       </Card>
 
       {/* 알림 설정 */}

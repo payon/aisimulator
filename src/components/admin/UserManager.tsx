@@ -368,6 +368,7 @@ export default function UserManager() {
                 onChange={(e) => setFormPassword(e.target.value)}
                 placeholder={isCreating ? '비밀번호 입력' : '새 비밀번호'}
               />
+              <p className="text-xs text-muted-foreground">8자 이상, 영문+숫자 포함 (특수문자 권장)</p>
             </div>
           </div>
           <DialogFooter>

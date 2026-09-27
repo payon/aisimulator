@@ -11,6 +11,9 @@ import {
   Settings,
   FlaskConical,
   AppWindow,
+  KeyRound,
+  BarChart3,
+  Bell,
   Loader2,
   Menu,
   LogOut,
@@ -42,6 +45,9 @@ import AuditLogViewer from './AuditLogViewer';
 import SiteConfigEditor from './SiteConfigEditor';
 import MockDataManager from './MockDataManager';
 import PwaIconManager from './PwaIconManager';
+import SecurityPanel from './SecurityPanel';
+import AnalyticsPanel from './AnalyticsPanel';
+import PushPanel from './PushPanel';
 import { toast } from 'sonner';
 
 /* ------------------------------------------------------------------ */
@@ -77,6 +83,9 @@ const NAV_ITEMS: NavItem[] = [
   { value: 'config', label: '사이트 설정', icon: Settings },
   { value: 'mock', label: '목업 데이터', icon: FlaskConical },
   { value: 'icons', label: 'PWA 아이콘', icon: AppWindow },
+  { value: 'security', label: '내 계정 보안', icon: KeyRound },
+  { value: 'analytics', label: '사용량 분석', icon: BarChart3 },
+  { value: 'push', label: '푸시 알림', icon: Bell },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -101,6 +110,12 @@ function AdminContent({ activeTab }: { activeTab: string }) {
       return <MockDataManager />;
     case 'icons':
       return <PwaIconManager />;
+    case 'security':
+      return <SecurityPanel />;
+    case 'analytics':
+      return <AnalyticsPanel />;
+    case 'push':
+      return <PushPanel />;
     default:
       return <AdminDashboard />;
   }

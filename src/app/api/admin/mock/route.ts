@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { authenticateRequest, hasPermission } from '@/lib/admin-auth';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
 import { isAllowedUrlValue } from '@/lib/cms-validate';
+import { logger } from '@/lib/logger';
 import {
   MOCK_CHAT_RESPONSES,
   MOCK_QUIZ_DATA,
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ mockData: structured, raw: mockData });
   } catch (error) {
-    console.error('Mock data GET error:', error);
+    logger.error('Mock data GET error:', error);
     return NextResponse.json(
       { error: '목업 데이터 조회 중 오류가 발생했습니다.' },
       { status: 500 }
@@ -276,7 +277,7 @@ export async function POST(request: NextRequest) {
       savedKeys: entries.map((e) => e.key),
     });
   } catch (error) {
-    console.error('Mock data POST error:', error);
+    logger.error('Mock data POST error:', error);
     return NextResponse.json(
       { error: '목업 데이터 저장 중 오류가 발생했습니다.' },
       { status: 500 }

@@ -4,6 +4,8 @@ import { validateMessage, filterOutput } from '@/lib/security';
 import { CHAT_SYSTEM_PROMPT } from '@/lib/prompts';
 import { callChatCompletion } from '@/lib/ai-provider';
 import { isMockMode, getMockChatResponseFromDB } from '@/lib/mock-data';
+import { trackActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,6 +29,7 @@ export async function POST(request: NextRequest) {
     // ===== Mock 모드 확인 (DB 기반 데이터 우선) =====
     const mockMode = await isMockMode();
     if (mockMode) {
+      trackActivity('chat_message', 'chat', { mockMode: true });
       const mockReply = await getMockChatResponseFromDB(message);
       return NextResponse.json({
         success: true,
@@ -49,6 +52,7 @@ export async function POST(request: NextRequest) {
     messages.push({ role: 'user', content: message });
 
     const reply = await callChatCompletion(messages);
+    trackActivity('chat_message', 'chat', { mockMode: false });
 
     const filtered = filterOutput(reply);
     return NextResponse.json({
@@ -58,7 +62,7 @@ export async function POST(request: NextRequest) {
       mockMode: false,
     });
   } catch (error) {
-    console.error('Chat API error:', error);
+    logger.error('Chat API error:', error);
     return NextResponse.json(
       { success: false, error: 'AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요.' },
       { status: 500 }

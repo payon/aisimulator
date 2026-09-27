@@ -9,11 +9,14 @@ interface SettingsState {
   voiceEnabled: boolean;
   readingSpeed: number;
   touchTargetLarge: boolean;
+  language: string;
+  langCustomized: boolean;
   setFontSize: (size: FontSize) => void;
   toggleHighContrast: () => void;
   setVoiceEnabled: (enabled: boolean) => void;
   setReadingSpeed: (speed: number) => void;
   setTouchTargetLarge: (large: boolean) => void;
+  setLanguage: (lang: string, customized?: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -24,11 +27,14 @@ export const useSettingsStore = create<SettingsState>()(
       voiceEnabled: true,
       readingSpeed: 0.8,
       touchTargetLarge: true,
+      language: 'ko',
+      langCustomized: false,
       setFontSize: (size) => set({ fontSize: size }),
       toggleHighContrast: () => set((state) => ({ highContrast: !state.highContrast })),
       setVoiceEnabled: (enabled) => set({ voiceEnabled: enabled }),
       setReadingSpeed: (speed) => set({ readingSpeed: speed }),
       setTouchTargetLarge: (large) => set({ touchTargetLarge: large }),
+      setLanguage: (language, customized = true) => set({ language, langCustomized: customized }),
     }),
     { name: 'senior-settings' }
   )

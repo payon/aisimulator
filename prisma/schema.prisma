@@ -69,6 +69,9 @@ model AdminUser {
   passwordHash String    // bcrypt 해시
   role         String    @default("editor") // superadmin, admin, editor, viewer
   isActive     Boolean   @default(true)
+  mustChangePassword Boolean @default(false) // 다음 로그인 시 비밀번호 변경 강제
+  totpSecret   String?   // TOTP 시크릿 (base32, 암호화 저장)
+  totpEnabled  Boolean   @default(false) // 2단계 인증 사용 여부
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -105,6 +108,8 @@ model SiteConfig {
   language    String   @default("ko")
   maintenanceMode Boolean @default(false)
   mockMode    Boolean  @default(false) // 시뮬레이션/목업 모드 (인터넷 없이도 동작 시연)
+  vapidPublicKey String? // Web Push VAPID 공개키
+  vapidPrivateKey String? // Web Push VAPID 비공개키 (암호화 저장)
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
 }
@@ -188,4 +193,15 @@ model Permission {
   canViewAnalytics       Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+/// Web Push 구독 (브라우저 푸시 수신자)
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

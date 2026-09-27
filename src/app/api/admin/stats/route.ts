@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { authenticateRequest, getActiveSessionCount } from '@/lib/admin-auth'
+import { logger } from '@/lib/logger'
 
 /** GET - Return dashboard statistics */
 export async function GET(request: NextRequest) {
@@ -117,7 +118,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Stats error:', error)
+    logger.error('Stats error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TABS, type TabId } from '@/types';
 import { useSpeechSynthesis } from '@/hooks/use-voice';
-import { useCmsContent } from '@/hooks/use-cms-content';
+import { useCmsContent, setCmsLanguage } from '@/hooks/use-cms-content';
 import { useSettingsStore } from '@/stores/index';
 import { useClientValue } from '@/hooks/use-hydrated';
 import { detectKioskMode, isKioskMode, KIOSK_IDLE_RESET_MS } from '@/lib/kiosk';
@@ -68,42 +68,65 @@ const TAB_ICONS: Record<TabId, React.ReactNode> = {
   settings: <Settings className="w-5 h-5" />,
 };
 
-// 키오스크 모드 감지 + Mock 모드 상태
+// 키오스크 모드 감지 + Mock 모드 상태 + 사이트 언어
 function useSiteConfig() {
   const [mode, setMode] = useState<'auto' | 'kiosk-21' | 'kiosk-32' | 'desktop' | 'tablet' | 'mobile'>('auto');
   const [mockMode, setMockMode] = useState(false);
+  const [siteLanguage, setSiteLanguage] = useState('ko');
 
   useEffect(() => {
+    let cancelled = false;
+    // 사용자 지정 언어가 없을 때만 사이트 기본값으로 CMS 언어 동기화
+    const applySiteLang = (lang: string) => {
+      if (!useSettingsStore.getState().langCustomized) {
+        setCmsLanguage(lang);
+      }
+    };
+    const updateMode = () => {
+      // 단일 기준 lib/kiosk (21" 1080 / 32" 1920)
+      const detected = detectKioskMode(window.innerWidth);
+      if (!cancelled) {
+        if (detected === 'kiosk-32') setMode('kiosk-32');
+        else if (detected === 'kiosk-21') setMode('kiosk-21');
+        else setMode('auto');
+      }
+    };
     const detect = async () => {
+      let forceMode: string | null = null;
       try {
         const res = await fetch('/api/config');
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.data) {
-            if (data.data.mockMode !== undefined) setMockMode(data.data.mockMode);
+            if (data.data.mockMode !== undefined && !cancelled) setMockMode(data.data.mockMode);
+            if (data.data.language) {
+              if (!cancelled) setSiteLanguage(data.data.language);
+              applySiteLang(data.data.language);
+            } else {
+              applySiteLang('ko');
+            }
             if (data.data.layoutMode && data.data.layoutMode !== 'auto') {
-              setMode(data.data.layoutMode);
-              return;
+              forceMode = data.data.layoutMode;
             }
           }
         }
       } catch { /* ignore */ }
-
-      const updateMode = () => {
-        // 단일 기준 lib/kiosk (21" 1080 / 32" 1920)
-        const detected = detectKioskMode(window.innerWidth);
-        if (detected === 'kiosk-32') setMode('kiosk-32');
-        else if (detected === 'kiosk-21') setMode('kiosk-21');
-        else setMode('auto');
-      };
-      updateMode();
-      window.addEventListener('resize', updateMode);
-      return () => window.removeEventListener('resize', updateMode);
+      if (cancelled) return;
+      if (forceMode) {
+        setMode(forceMode as typeof mode);
+      } else {
+        updateMode();
+        window.addEventListener('resize', updateMode);
+      }
     };
     detect();
+    return () => {
+      cancelled = true;
+      window.removeEventListener('resize', updateMode);
+    };
   }, []);
 
-  return { mode, mockMode, setMockMode };
+  return { mode, mockMode, siteLanguage, setMockMode };
 }
 
 // 폰트 크기 클래스 매핑
@@ -200,8 +223,8 @@ export default function MainApp() {
       setActiveTab(tabParam as TabId); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, []);
-  const { mode: kioskMode, mockMode } = useSiteConfig();
-  const { speak, stop, status: ttsStatus, warmUp, koreanVoiceFound, voiceName } = useSpeechSynthesis();
+  const { mode: kioskMode, mockMode, siteLanguage } = useSiteConfig();
+  const { speak, stop, status: ttsStatus, warmUp, koreanVoiceFound, voiceName, engineReady, speakServer } = useSpeechSynthesis();
   const { getContent } = useCmsContent();
   const { fontSize, highContrast, voiceEnabled, touchTargetLarge, setVoiceEnabled } = useSettingsStore();
 
@@ -246,6 +269,41 @@ export default function MainApp() {
       events.forEach((e) => window.removeEventListener(e, resetTimer));
     };
   }, [isKiosk, stop]);
+
+  // 키오스크 원격 명령 수신 (kiosk.command 폴링 — CMS 15초 주기와 함께 수렴)
+  // 렌더 캐스케이드 방지를 위해 명령 실행은 microtask로 위임
+  const processedCmdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const cmdRaw = getContent('kiosk.command', '');
+    if (!cmdRaw) return;
+    try {
+      const cmd = JSON.parse(cmdRaw);
+      if (!cmd.id || cmd.id === processedCmdRef.current) return;
+      processedCmdRef.current = cmd.id;
+      queueMicrotask(() => {
+        if (cmd.action === 'reload') {
+          window.location.reload();
+        } else if (cmd.action === 'home') {
+          stop();
+          setActiveTab('home');
+        }
+      });
+    } catch { /* invalid JSON 무시 */ }
+  });
+
+  // 키오스크 운영시간 외 안내 (kiosk.hours {open:"09:00", close:"18:00"})
+  const hoursRaw = getContent('kiosk.hours', '');
+  let outsideHours = false;
+  if (hoursRaw) {
+    try {
+      const h = JSON.parse(hoursRaw);
+      if (h.open || h.close) {
+        const now = new Date();
+        const cur = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        if ((h.open && cur < h.open) || (h.close && cur >= h.close)) outsideHours = true;
+      }
+    } catch { /* ignore */ }
+  }
 
   const siteName = getContent('global.siteName', 'AI 플랫폼');
 
@@ -393,6 +451,8 @@ export default function MainApp() {
                       onToggleVoice={toggleVoice}
                       speak={speak}
                       stop={stop}
+                      engineReady={engineReady}
+                      speakServer={speakServer}
                     />
                   )}
                   {activeTab === 'image' && <ImagePanel />}
@@ -418,6 +478,16 @@ export default function MainApp() {
 
       {/* PWA: 앱 모드 배지 */}
       {!isKiosk && <PWAStatusBadge className="fixed top-16 right-4 z-40" />}
+
+      {/* 키오스크 운영시간 외 안내 */}
+      {isKiosk && outsideHours && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900 text-white p-8 text-center">
+          <div>
+            <p className="text-3xl font-bold mb-4">운영 시간이 아닙니다</p>
+            <p className="text-lg text-slate-300">운영 시간에 다시 이용해 주세요.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

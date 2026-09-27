@@ -4,6 +4,8 @@ import { authenticateRequest, hasPermission } from '@/lib/admin-auth'
 import { logAction } from '@/lib/audit'
 import { checkAdminRateLimit } from '@/lib/rate-limit'
 import { updateContentByKeySchema, validateContentValue } from '@/lib/cms-validate'
+import { recordContentVersion } from '@/lib/versions'
+import { logger } from '@/lib/logger'
 
 interface RouteContext {
   params: Promise<{ key: string }>
@@ -48,7 +50,7 @@ export async function GET(
 
     return NextResponse.json({ item })
   } catch (error) {
-    console.error('Content get by key error:', error)
+    logger.error('Content get by key error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -111,12 +113,16 @@ export async function PUT(
       data: updateData,
     })
 
+    if (parsed.data.value !== undefined) {
+      await recordContentVersion(item.id, key, existing.value, parsed.data.value, session.email)
+    }
+
     const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? null
     await logAction(session.userId, session.email, 'update', 'content', item.id, { key, ...updateData }, ip)
 
     return NextResponse.json({ item })
   } catch (error) {
-    console.error('Content update by key error:', error)
+    logger.error('Content update by key error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -156,7 +162,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Content item deleted' })
   } catch (error) {
-    console.error('Content delete by key error:', error)
+    logger.error('Content delete by key error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

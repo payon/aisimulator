@@ -61,11 +61,9 @@ export function deleteSession(token: string): boolean {
 
 /** Extract token from Authorization header and validate session */
 export function authenticateRequest(request: Request): Session | null {
-  const authHeader = request.headers.get('Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
-
-  const token = authHeader.slice(7)
-  return getSession(token)
+  const token = sessionTokenFromRequest(request);
+  if (!token) return null;
+  return getSession(token);
 }
 
 /** Check if a role has a specific permission */
@@ -125,3 +123,80 @@ export function getActiveSessionCount(): number {
 
 // Type for permission keys
 export type PermissionKey = 'canManageUsers' | 'canManageContent' | 'canManageConfig' | 'canViewAudit' | 'canDeleteContent' | 'canManageAPIKeys' | 'canManageNotifications' | 'canExportData' | 'canViewAnalytics'
+
+/** 비밀번호 정책: 8자 이상 + 영문 + 숫자 (특수문자 권장) */
+export function validatePasswordPolicy(password: unknown): string | null {
+  if (typeof password !== 'string' || password.length < 8) {
+    return '비밀번호는 8자 이상이어야 합니다.';
+  }
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    return '비밀번호는 영문과 숫자를 각각 1자 이상 포함해야 합니다.';
+  }
+  return null;
+}
+
+// ============================================
+// Single-use 임시 토큰 (2FA 2단계·비밀번호 강제 변경용, 10분)
+// ============================================
+
+interface TempToken {
+  userId: string;
+  purpose: 'totp' | 'force-change';
+  expiresAt: number;
+}
+
+function getTempMap(): Map<string, TempToken> {
+  const g = globalThis as unknown as { __adminTempTokens?: Map<string, TempToken> };
+  if (!g.__adminTempTokens) g.__adminTempTokens = new Map<string, TempToken>();
+  return g.__adminTempTokens;
+}
+
+export function createTempToken(userId: string, purpose: TempToken['purpose']): string {
+  const map = getTempMap();
+  const token = crypto.randomUUID();
+  map.set(token, { userId, purpose, expiresAt: Date.now() + 10 * 60 * 1000 });
+  return token;
+}
+
+/** 검증 성공 시 userId 반환 + 즉시 폐기 (재사용 불가) */
+export function consumeTempToken(token: string, purpose: TempToken['purpose']): string | null {
+  const map = getTempMap();
+  const entry = map.get(token);
+  if (!entry || entry.purpose !== purpose) return null;
+  map.delete(token);
+  if (Date.now() > entry.expiresAt) return null;
+  return entry.userId;
+}
+
+// ============================================
+// HttpOnly 세션 쿠키 (localStorage 토큰과 병행)
+// ============================================
+
+export const SESSION_COOKIE = 'admin_session';
+
+export function sessionCookieHeader(token: string, secure: boolean): string {
+  const parts = [`${SESSION_COOKIE}=${token}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=86400'];
+  if (secure) parts.push('Secure');
+  return parts.join('; ');
+}
+
+export function clearSessionCookieHeader(): string {
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+function tokenFromCookieHeader(request: Request): string | null {
+  const cookie = request.headers.get('cookie');
+  if (!cookie) return null;
+  for (const part of cookie.split(';')) {
+    const [k, ...rest] = part.trim().split('=');
+    if (k === SESSION_COOKIE) return rest.join('=') || null;
+  }
+  return null;
+}
+
+/** Bearer 헤더 우선, 없으면 HttpOnly 쿠키에서 세션 조회 */
+export function sessionTokenFromRequest(request: Request): string | null {
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) return authHeader.slice(7);
+  return tokenFromCookieHeader(request);
+}

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { authenticateRequest, hasPermission, hashPassword } from '@/lib/admin-auth'
+import { authenticateRequest, hasPermission, hashPassword, validatePasswordPolicy } from '@/lib/admin-auth'
 import { logAction } from '@/lib/audit'
 import { checkAdminRateLimit } from '@/lib/rate-limit'
+import { logger } from '@/lib/logger'
 
 function adminLimited(request: NextRequest) {
   const rl = checkAdminRateLimit(request)
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users })
   } catch (error) {
-    console.error('Users list error:', error)
+    logger.error('Users list error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -71,6 +72,11 @@ export async function POST(request: NextRequest) {
         { error: 'Email, name, and password are required' },
         { status: 400 }
       )
+    }
+
+    const policyError = validatePasswordPolicy(password)
+    if (policyError) {
+      return NextResponse.json({ error: policyError }, { status: 400 })
     }
 
     // Check for duplicate email
@@ -113,7 +119,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
-    console.error('User create error:', error)
+    logger.error('User create error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -178,7 +184,14 @@ export async function PUT(request: NextRequest) {
     if (name !== undefined) updateData.name = name
     if (role !== undefined) updateData.role = role
     if (isActive !== undefined) updateData.isActive = isActive
-    if (password) updateData.passwordHash = await hashPassword(password)
+    if (typeof body.mustChangePassword === 'boolean') updateData.mustChangePassword = body.mustChangePassword
+    if (password) {
+      const policyError = validatePasswordPolicy(password)
+      if (policyError) {
+        return NextResponse.json({ error: policyError }, { status: 400 })
+      }
+      updateData.passwordHash = await hashPassword(password)
+    }
 
     const user = await db.adminUser.update({
       where: { id },
@@ -204,7 +217,7 @@ export async function PUT(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('User update error:', error)
+    logger.error('User update error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -268,7 +281,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ message: 'User deleted successfully' })
   } catch (error) {
-    console.error('User delete error:', error)
+    logger.error('User delete error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

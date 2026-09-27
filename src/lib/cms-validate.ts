@@ -12,6 +12,8 @@ export const CONTENT_CATEGORIES = [
   'global',
   'nav',
   'general',
+  'mock',
+  'kiosk',
 ] as const;
 
 export const MAX_VALUE_LEN = 50_000;

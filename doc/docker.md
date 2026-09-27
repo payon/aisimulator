@@ -68,7 +68,7 @@ docker compose exec db pg_dump -U aiplatform aiplatform > backup-$(date +%F).sql
 ```bash
 # DB만 compose로 띄우고 Next는 로컬 dev 서버로
 docker compose up -d db
-# .env: DATABASE_URL=postgresql://aiplatform:aiplatform@localhost:5432/aiplatform
+# .env: DATABASE_URL=postgresql://aiplatform:aiplatform@localhost:5433/aiplatform
 bun run dev
 ```
 
@@ -80,3 +80,23 @@ bun run dev
 | `EADDRINUSE 3300` | 로컬 dev 서버 중복 → `pkill -f "next dev"` 후 compose 기동, 또는 `APP_PORT=3301 docker compose up -d` |
 | 빌드 시 sharp/prisma 에러 | `node:20-bookworm-slim` 기준 prebuilt 사용. 아키텍처가 ARM이 아닌지 확인 (`docker compose build --no-cache`) |
 | 로그인 401 반복 | 컨테이너 재시작 시 인메모리 세션 초기화 → 재로그인 |
+
+## 7. E2E 테스트 (Playwright)
+
+```bash
+bunx playwright install chromium   # 최초 1회 (CI는 --with-deps 필요)
+```
+
+테스트는 2FA 없는 관리자 계정이 필요하다. superadmin으로 생성 후 환경변수로 지정:
+
+```bash
+# E2E 전용 계정 생성 (예시, 테스트 후 삭제 권장)
+# 관리자 → 사용자 관리 → e2e@aiplatform.kr / admin 역할
+E2E_BASE_URL=http://localhost:3300 \
+E2E_ADMIN_EMAIL=e2e@aiplatform.kr \
+E2E_ADMIN_PASSWORD='<password>' \
+bunx playwright test
+```
+
+포함된 시나리오: 관리자 로그인(성공/실패/화면), CMS CRUD + XSS 가드 + 버전 롤백,
+목업 프리셋 반영, 헬스체크 (`tests/e2e/`).

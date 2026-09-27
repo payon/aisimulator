@@ -4,6 +4,8 @@ import { authenticateRequest, hasPermission } from '@/lib/admin-auth'
 import { logAction } from '@/lib/audit'
 import { checkAdminRateLimit } from '@/lib/rate-limit'
 import { createContentSchema, updateContentSchema, validateContentValue } from '@/lib/cms-validate'
+import { recordContentVersion } from '@/lib/versions'
+import { logger } from '@/lib/logger'
 
 function adminLimited(request: NextRequest) {
   const rl = checkAdminRateLimit(request)
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items })
   } catch (error) {
-    console.error('Content list error:', error)
+    logger.error('Content list error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ item }, { status: 201 })
   } catch (error) {
-    console.error('Content create error:', error)
+    logger.error('Content create error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -175,12 +177,17 @@ export async function PUT(request: NextRequest) {
       data: updateData,
     })
 
+    // 값 변경 시 버전 스냅샷 기록
+    if (value !== undefined) {
+      await recordContentVersion(item.id, item.key, existing.value, value, session.email)
+    }
+
     const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? null
     await logAction(session.userId, session.email, 'update', 'content', item.id, updateData, ip)
 
     return NextResponse.json({ item })
   } catch (error) {
-    console.error('Content update error:', error)
+    logger.error('Content update error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -225,7 +232,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ message: 'Content item deleted' })
   } catch (error) {
-    console.error('Content delete error:', error)
+    logger.error('Content delete error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 /**
  * PUBLIC content API for frontend consumption.
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
       }
     )
   } catch (error) {
-    console.error('Public content API error:', error)
+    logger.error('Public content API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

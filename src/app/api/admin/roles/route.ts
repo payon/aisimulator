@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { authenticateRequest, hasPermission } from '@/lib/admin-auth'
 import { logAction } from '@/lib/audit'
+import { logger } from '@/lib/logger'
 
 /** GET - List all roles with permissions */
 export async function GET(request: NextRequest) {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ roles })
   } catch (error) {
-    console.error('Roles list error:', error)
+    logger.error('Roles list error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -86,7 +87,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ permission })
   } catch (error) {
-    console.error('Role update error:', error)
+    logger.error('Role update error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

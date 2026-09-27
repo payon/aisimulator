@@ -30,9 +30,11 @@ interface ChatPanelProps {
   onToggleVoice: () => void;
   speak: (text: string, rate?: number) => void;
   stop: () => void;
+  engineReady?: boolean;
+  speakServer?: (text: string) => Promise<boolean>;
 }
 
-export default function ChatPanel({ voiceEnabled, onToggleVoice, speak, stop }: ChatPanelProps) {
+export default function ChatPanel({ voiceEnabled, onToggleVoice, speak, stop, engineReady = true, speakServer }: ChatPanelProps) {
   const { getContent } = useCmsContent();
   const { readingSpeed, fontSize } = useSettingsStore();
   const { mockMode } = useMockMode();
@@ -44,6 +46,20 @@ export default function ChatPanel({ voiceEnabled, onToggleVoice, speak, stop }: 
   const inputRef = useRef<HTMLInputElement>(null);
   const isAutoScrollRef = useRef(true);
   const { isListening, transcript, startListening, stopListening } = useVoiceInput();
+
+  // 음성 출력 (브라우저 엔진 우선, 없으면 서버 TTS 폴백)
+  const speakReply = useCallback(async (text: string) => {
+    if (engineReady) {
+      speak(text, readingSpeed);
+      return;
+    }
+    if (speakServer) {
+      const ok = await speakServer(text);
+      if (!ok) toast.error('음성을 재생할 수 없습니다. 서버 TTS 키를 확인해주세요.');
+    } else {
+      toast.error('이 기기에서는 음성 읽기를 지원하지 않습니다.');
+    }
+  }, [engineReady, speak, speakServer, readingSpeed]);
 
   // 음성 인식 결과 반영
   useEffect(() => {
@@ -109,7 +125,7 @@ export default function ChatPanel({ voiceEnabled, onToggleVoice, speak, stop }: 
         const assistantMsg: Message = { role: 'assistant', content: data.reply, mockMode: data.mockMode || false };
         setMessages((prev) => [...prev, assistantMsg]);
         if (voiceEnabled) {
-          speak(data.reply, readingSpeed);
+          speakReply(data.reply);
         }
       } else {
         setMessages((prev) => [
@@ -233,7 +249,7 @@ export default function ChatPanel({ voiceEnabled, onToggleVoice, speak, stop }: 
                   {/* TTS 개별 메시지 읽기 버튼 */}
                   {msg.role === 'assistant' && !msg.isError && voiceEnabled && (
                     <button
-                      onClick={() => speak(msg.content, readingSpeed)}
+                      onClick={() => speakReply(msg.content)}
                       className="mt-2 inline-flex items-center gap-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
                       title="이 답변 음성으로 듣기"
                     >

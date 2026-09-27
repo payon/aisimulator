@@ -6,6 +6,7 @@ import { PWA_ICONS, findPwaIcon } from '@/lib/pwa-icons';
 import { stat, writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import sharp from 'sharp';
+import { logger } from '@/lib/logger'
 
 const ICONS_DIR = path.join(process.cwd(), 'public', 'icons');
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items });
   } catch (error) {
-    console.error('PWA icons list error:', error);
+    logger.error('PWA icons list error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
       bytes: out.length,
     });
   } catch (error) {
-    console.error('PWA icon upload error:', error);
+    logger.error('PWA icon upload error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -160,7 +161,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: '아이콘이 삭제되었습니다. manifest 참조가 깨질 수 있습니다.' });
   } catch (error) {
-    console.error('PWA icon delete error:', error);
+    logger.error('PWA icon delete error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

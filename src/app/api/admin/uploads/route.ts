@@ -6,6 +6,7 @@ import { checkAdminRateLimit } from '@/lib/rate-limit';
 import { randomUUID } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
+import { logger } from '@/lib/logger'
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME: Record<string, string> = {
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url, size: file.size, mime: file.type }, { status: 201 });
   } catch (error) {
-    console.error('Upload error:', error);
+    logger.error('Upload error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

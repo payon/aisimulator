@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { callChatCompletion } from '@/lib/ai-provider';
 import { isMockMode, getMockQuizDataFromDB } from '@/lib/mock-data';
+import { trackActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +22,7 @@ export async function POST(request: NextRequest) {
     // ===== Mock 모드 확인 (DB 기반 데이터 우선) =====
     const mockMode = await isMockMode();
     if (mockMode) {
+      trackActivity('quiz_start', 'quiz', { difficulty, mockMode: true });
       const mockQuestions = await getMockQuizDataFromDB(difficulty);
       return NextResponse.json({
         success: true,
@@ -70,6 +73,7 @@ export async function POST(request: NextRequest) {
 
     const questions = JSON.parse(jsonMatch[0]);
 
+    trackActivity('quiz_start', 'quiz', { difficulty, mockMode: false });
     return NextResponse.json({
       success: true,
       questions,
@@ -77,7 +81,7 @@ export async function POST(request: NextRequest) {
       mockMode: false,
     });
   } catch (error) {
-    console.error('Quiz API error:', error);
+    logger.error('Quiz API error:', error);
     return NextResponse.json({ success: false, error: '퀴즈를 불러오는데 실패했습니다.' }, { status: 500 });
   }
 }

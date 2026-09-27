@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useAdminAuth } from '@/hooks/use-admin-auth';
+import KioskControl from './KioskControl';
 import { toast } from 'sonner';
 
 interface SiteConfig {
@@ -370,6 +371,15 @@ export default function SiteConfigEditor() {
                 </div>
               </CardContent>
             </Card>
+          </motion.div>
+
+          {/* Kiosk Remote Control */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.3 }}
+          >
+            <KioskControl />
           </motion.div>
 
           {/* Save Button */}

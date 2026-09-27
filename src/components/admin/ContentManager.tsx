@@ -8,6 +8,7 @@ import {
   Pencil,
   Trash2,
   Loader2,
+  History,
   Image as ImageIcon,
   FileText,
   Code,
@@ -74,6 +75,9 @@ const CATEGORIES = [
   { value: 'settings', label: '설정' },
   { value: 'global', label: '전역' },
   { value: 'nav', label: '네비게이션' },
+  { value: 'general', label: '일반' },
+  { value: 'mock', label: '체험 목업' },
+  { value: 'kiosk', label: '키오스크' },
 ];
 
 const CONTENT_TYPES = [
@@ -94,6 +98,9 @@ const CATEGORY_COLORS: Record<string, 'default' | 'secondary' | 'outline'> = {
   settings: 'outline',
   global: 'default',
   nav: 'secondary',
+  general: 'outline',
+  mock: 'secondary',
+  kiosk: 'default',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -105,6 +112,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   settings: '설정',
   global: '전역',
   nav: '네비게이션',
+  general: '일반',
+  mock: '체험 목업',
+  kiosk: '키오스크',
 };
 
 export default function ContentManager() {
@@ -133,6 +143,58 @@ export default function ContentManager() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentItem | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Version history
+  interface ContentVersion {
+    id: string;
+    key: string;
+    oldValue: string | null;
+    newValue: string;
+    updatedBy: string | null;
+    createdAt: string;
+  }
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<ContentItem | null>(null);
+  const [versions, setVersions] = useState<ContentVersion[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const openHistory = async (item: ContentItem) => {
+    setHistoryTarget(item);
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const res = await authenticatedFetch(`/api/admin/content/versions?contentId=${item.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setVersions(data.versions || []);
+      }
+    } catch {
+      toast.error('버전 이력을 불러오지 못했습니다.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleRollback = async (versionId: string) => {
+    try {
+      const res = await authenticatedFetch('/api/admin/content/rollback', {
+        method: 'POST',
+        body: JSON.stringify({ versionId }),
+      });
+      if (res.ok) {
+        toast.success('이전 버전으로 복원되었습니다.');
+        setHistoryOpen(false);
+        setHistoryTarget(null);
+        fetchItems();
+        refreshCmsContent();
+      } else if (res.status !== 401) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || '복원에 실패했습니다.');
+      }
+    } catch {
+      toast.error('복원 중 오류가 발생했습니다.');
+    }
+  };
 
   const handleImageFileUpload = async (file: File) => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
@@ -404,8 +466,11 @@ export default function ContentManager() {
                         </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(item)} title="수정">
                           <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => openHistory(item)} title="버전 이력">
+                          <History className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -565,6 +630,57 @@ export default function ContentManager() {
             <Button onClick={handleSave} disabled={saving}>
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {isCreating ? '생성' : '저장'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Version History */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>버전 이력</DialogTitle>
+            <DialogDescription>
+              {historyTarget?.key} — 복원하면 현재 값이 해당 버전으로 되돌아갑니다 (복원 전 현재값도 자동 보관).
+            </DialogDescription>
+          </DialogHeader>
+          {historyLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : versions.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">기록된 버전이 없습니다.</p>
+          ) : (
+            <div className="space-y-3">
+              {versions.map((v) => (
+                <div key={v.id} className="border rounded-lg p-3 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(v.createdAt).toLocaleString('ko-KR')} · {v.updatedBy || '시스템'}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => handleRollback(v.id)}>
+                      이 버전으로 복원
+                    </Button>
+                  </div>
+                  <p className="text-xs font-medium text-muted-foreground">변경 후 값:</p>
+                  <p className="text-sm whitespace-pre-wrap break-words bg-muted/50 rounded p-2 max-h-32 overflow-y-auto">
+                    {v.newValue}
+                  </p>
+                  {v.oldValue != null && (
+                    <>
+                      <p className="text-xs font-medium text-muted-foreground">변경 전 값:</p>
+                      <p className="text-sm whitespace-pre-wrap break-words bg-muted/30 rounded p-2 max-h-24 overflow-y-auto">
+                        {v.oldValue}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistoryOpen(false)}>
+              닫기
             </Button>
           </DialogFooter>
         </DialogContent>

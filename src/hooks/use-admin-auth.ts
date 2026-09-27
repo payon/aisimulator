@@ -3,10 +3,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdminStore } from '@/stores/admin-store';
 
+export type LoginResult =
+  | { ok: true }
+  | { ok: false; error?: string }
+  | { ok: false; totpRequired: true; tempToken: string }
+  | { ok: false; mustChangeRequired: true; tempToken: string };
+
 interface UseAdminAuthReturn {
   isAuthenticated: boolean;
   user: { id: string; email: string; name: string; role: string } | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  verifyTotp: (tempToken: string, totp: string) => Promise<boolean>;
+  changePassword: (payload: { tempToken: string; newPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>;
   isLoading: boolean;
@@ -18,48 +26,78 @@ export function useAdminAuth(): UseAdminAuthReturn {
   // 중복 로그아웃 방지
   const logoutTriggeredRef = useRef(false);
 
-  // hydration 후 서버에 세션 유효성 확인
+  // hydration 후 서버에 세션 유효성 확인 (쿠키 전송 포함)
   useEffect(() => {
     const storedToken = localStorage.getItem('admin_token');
-    if (storedToken && !isAuthenticated) {
+    const verify = (tok?: string) => {
+      const headers: Record<string, string> = {};
+      if (tok) headers['Authorization'] = `Bearer ${tok}`;
       setIsLoading(true);
-      // 서버에 세션이 유효한지 확인
-      fetch('/api/admin/auth', {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${storedToken}` },
-      })
+      fetch('/api/admin/auth', { method: 'GET', headers, credentials: 'include' })
         .then((res) => res.json())
         .then((data) => {
           if (data.authenticated && data.user) {
-            // 세션이 유효함 - 스토어 업데이트
-            storeLogin(storedToken, data.user);
+            // 토큰이 있으면 스토어 유지, 쿠키 전용이면 세션만 표시
+            if (tok) storeLogin(tok, data.user);
+            else storeLogin('', data.user);
           } else {
-            // 세션이 만료됨 - 로컬 스토리지 정리
             storeLogout();
           }
         })
         .catch(() => {
-          // 네트워크 오류 - 오프라인 상태면 기존 토큰 유지
           storeCheckAuth();
         })
         .finally(() => {
           setIsLoading(false);
         });
+    };
+    if (storedToken && !isAuthenticated) {
+      verify(storedToken);
+    } else if (!storedToken && !isAuthenticated) {
+      // 쿠키 세션 확인 (HttpOnly)
+      verify(undefined);
     }
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     try {
       setIsLoading(true);
       const res = await fetch('/api/admin/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
 
-      if (!res.ok) return false;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error };
 
-      const data = await res.json();
+      if (data.totpRequired) return { ok: false, totpRequired: true, tempToken: data.tempToken };
+      if (data.mustChangeRequired) return { ok: false, mustChangeRequired: true, tempToken: data.tempToken };
+      if (data.token && data.user) {
+        storeLogin(data.token, data.user);
+        return { ok: true };
+      }
+      return { ok: false };
+    } catch {
+      return { ok: false };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [storeLogin]);
+
+  const verifyTotp = useCallback(async (tempToken: string, totp: string): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ tempToken, totp }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return false;
+      if (data.mustChangeRequired) return false;
       if (data.token && data.user) {
         storeLogin(data.token, data.user);
         return true;
@@ -72,18 +110,31 @@ export function useAdminAuth(): UseAdminAuthReturn {
     }
   }, [storeLogin]);
 
+  const changePassword = useCallback(async (payload: { tempToken: string; newPassword: string }) => {
+    try {
+      const res = await fetch('/api/admin/auth/password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error };
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     // 서버에 세션 삭제 요청
     const currentToken = useAdminStore.getState().token;
-    if (currentToken) {
-      try {
-        await fetch('/api/admin/auth', {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${currentToken}` },
-        });
-      } catch {
-        // 네트워크 오류 무시 - 클라이언트 정리는 계속 진행
-      }
+    const headers: Record<string, string> = {};
+    if (currentToken) headers['Authorization'] = `Bearer ${currentToken}`;
+    try {
+      await fetch('/api/admin/auth', { method: 'DELETE', headers, credentials: 'include' });
+    } catch {
+      // 네트워크 오류 무시 - 클라이언트 정리는 계속 진행
     }
     storeLogout();
   }, [storeLogout]);
@@ -110,7 +161,8 @@ export function useAdminAuth(): UseAdminAuthReturn {
       headers.set('Content-Type', 'application/json');
     }
 
-    const response = await fetch(url, { ...options, headers });
+    // HttpOnly 쿠키 세션도 함께 전송
+    const response = await fetch(url, { ...options, headers, credentials: 'include' });
 
     // 401 = 세션 만료 → 자동 로그아웃
     if (response.status === 401) {
@@ -124,6 +176,8 @@ export function useAdminAuth(): UseAdminAuthReturn {
     isAuthenticated,
     user,
     login,
+    verifyTotp,
+    changePassword,
     logout,
     authenticatedFetch,
     isLoading,

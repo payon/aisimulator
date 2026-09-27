@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { authenticateRequest, hasPermission } from '@/lib/admin-auth'
 import { logAction } from '@/lib/audit'
 import { checkAdminRateLimit } from '@/lib/rate-limit'
+import { logger } from '@/lib/logger'
 
 function adminLimited(request: NextRequest) {
   const rl = checkAdminRateLimit(request)
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ config })
   } catch (error) {
-    console.error('Config get error:', error)
+    logger.error('Config get error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -97,7 +98,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ config })
   } catch (error) {
-    console.error('Config update error:', error)
+    logger.error('Config update error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

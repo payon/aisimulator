@@ -64,3 +64,7 @@ server.log
 *.tar
 
 /prisma/db/
+
+# TWA signing keys
+/twa/release.keystore
+/twa/*.jks

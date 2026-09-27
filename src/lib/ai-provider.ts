@@ -1,5 +1,6 @@
 import ZAI from 'z-ai-web-dev-sdk';
 import { db } from '@/lib/db';
+import { decryptSecret } from '@/lib/crypto';
 
 export type AIProvider = 'openai' | 'gemini' | 'grok' | 'claude' | 'zai-built-in';
 
@@ -19,10 +20,11 @@ export async function getSettings(): Promise<ProviderConfig> {
     }
     return {
       provider: (settings.provider as AIProvider) || 'zai-built-in',
-      openaiKey: settings.openaiKey || process.env.OPENAI_API_KEY || null,
-      geminiKey: settings.geminiKey || process.env.GEMINI_API_KEY || null,
-      grokKey: settings.grokKey || process.env.GROK_API_KEY || null,
-      claudeKey: settings.claudeKey || process.env.CLAUDE_API_KEY || null,
+      // DB 저장값은 암호화되어 있으므로 사용 시 복호화 (레거시 평문도 허용)
+      openaiKey: decryptSecret(settings.openaiKey) || process.env.OPENAI_API_KEY || null,
+      geminiKey: decryptSecret(settings.geminiKey) || process.env.GEMINI_API_KEY || null,
+      grokKey: decryptSecret(settings.grokKey) || process.env.GROK_API_KEY || null,
+      claudeKey: decryptSecret(settings.claudeKey) || process.env.CLAUDE_API_KEY || null,
     };
   } catch {
     return {

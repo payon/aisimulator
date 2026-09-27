@@ -22,6 +22,18 @@ let cacheTimestamp = 0;
 const CACHE_TTL = 10_000; // 10초 캐시
 const POLL_INTERVAL = 15_000; // 백그라운드 폴링 15초 (다른 단말 변경분 수렴)
 
+// 표시 언어 (기본 ko). 'ko'가 아니면 `{lang}.{key}`를 우선 조회하고
+// 없으면 기본 키로 폴백 — 관리자가 ContentManager에서 en.* 키를 추가하면 다국어 완성
+let cmsLanguage = 'ko';
+
+export function setCmsLanguage(lang: string) {
+  cmsLanguage = (lang || 'ko').toLowerCase();
+}
+
+export function getCmsLanguage(): string {
+  return cmsLanguage;
+}
+
 // 글로벌 리스너들 - 캐시 갱신 시 알림
 let refreshListeners: (() => void)[] = [];
 
@@ -103,10 +115,15 @@ export function useCmsContent() {
 
   /**
    * 콘텐츠 키로 값을 가져옵니다.
+   * 표시 언어가 ko가 아니면 `{lang}.{key}`를 먼저 찾고, 없으면 기본 키 → fallback 순.
    * @param key 콘텐츠 키 (예: 'home.hero.title')
    * @param fallback 기본값 (CMS에 값이 없을 때 사용)
    */
   const getContent = useCallback((key: string, fallback: string = ''): string => {
+    if (cmsLanguage !== 'ko') {
+      const localized = content[`${cmsLanguage}.${key}`];
+      if (localized !== undefined) return localized;
+    }
     return content[key] ?? fallback;
   }, [content]);
 

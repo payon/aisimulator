@@ -405,12 +405,61 @@ export function useSpeechSynthesis() {
     }, delay);
   }, [supported, splitIntoChunks, startChromeResumeTimer, stopChromeResumeTimer]);
 
+  // === 서버 TTS 폴백 (브라우저 음성 엔진이 없을 때) ===
+  const serverAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopServerAudio = useCallback(() => {
+    if (serverAudioRef.current) {
+      try {
+        serverAudioRef.current.pause();
+        serverAudioRef.current.src = '';
+      } catch { /* ignore */ }
+      serverAudioRef.current = null;
+    }
+  }, []);
+
+  /** 서버 음성 합성 후 재생. 성공 시 true */
+  const speakServer = useCallback(async (text: string): Promise<boolean> => {
+    if (typeof window === 'undefined') return false;
+    if (!text || text.trim().length === 0) return false;
+    stopServerAudio();
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.url) return false;
+      const audio = new Audio(data.url);
+      serverAudioRef.current = audio;
+      setSpeaking(true);
+      setStatus('speaking');
+      audio.onended = () => {
+        setSpeaking(false);
+        setStatus(supported ? 'ready' : 'unsupported');
+        if (serverAudioRef.current === audio) serverAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        setSpeaking(false);
+        setStatus(supported ? 'ready' : 'unsupported');
+        if (serverAudioRef.current === audio) serverAudioRef.current = null;
+      };
+      await audio.play();
+      return true;
+    } catch {
+      setSpeaking(false);
+      return false;
+    }
+  }, [stopServerAudio, supported]);
+
   // === stop: 재생 중지 ===
   const stop = useCallback(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
     window.speechSynthesis.cancel();
     stopChromeResumeTimer();
+    stopServerAudio();
     queueRef.current = [];
     allChunksRef.current = [];
     currentChunkIndexRef.current = 0;
@@ -418,7 +467,7 @@ export function useSpeechSynthesis() {
     retryCountRef.current = 0;
     setSpeaking(false);
     setStatus(supported ? 'ready' : 'unsupported');
-  }, [supported, stopChromeResumeTimer]);
+  }, [supported, stopChromeResumeTimer, stopServerAudio]);
 
   // === 컴포넌트 언마운트 시 정리 ===
   useEffect(() => {
@@ -427,8 +476,13 @@ export function useSpeechSynthesis() {
         window.speechSynthesis.cancel();
       }
       stopChromeResumeTimer();
+      stopServerAudio();
     };
   }, [stopChromeResumeTimer]);
+
+  // 브라우저 엔진 사용 가능 여부 (ready/speaking/paused/warming-up)
+  const engineReady =
+    supported && (effectiveStatus === 'ready' || effectiveStatus === 'speaking' || effectiveStatus === 'paused' || effectiveStatus === 'warming-up');
 
   return {
     speak,
@@ -440,6 +494,9 @@ export function useSpeechSynthesis() {
     availableVoices,
     status: effectiveStatus,
     warmUp,
+    engineReady,
+    speakServer,
+    stopServer: stopServerAudio,
   };
 }
 

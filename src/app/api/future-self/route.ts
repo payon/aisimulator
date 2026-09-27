@@ -3,6 +3,8 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { callChatCompletion } from '@/lib/ai-provider';
 import { validateImageDataUrl } from '@/lib/cms-validate';
 import { isMockMode, getMockFutureSelfFromDB, getMockFutureResultFromDB } from '@/lib/mock-data';
+import { trackActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger'
 
 const AGE_OPTIONS = [60, 70, 80, 90];
 
@@ -39,6 +41,7 @@ export async function POST(request: NextRequest) {
     // ===== Mock 모드 확인 (DB 기반 데이터 우선) =====
     const mockMode = await isMockMode();
     if (mockMode) {
+      trackActivity('future_generate', 'future', { targetAge, mockMode: true });
       const [mockFuture, preset] = await Promise.all([
         getMockFutureSelfFromDB(),
         getMockFutureResultFromDB(Number(targetAge)),
@@ -99,6 +102,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    trackActivity('future_generate', 'future', { targetAge, mockMode: false });
     return NextResponse.json({
       success: true,
       futureImage: `data:image/png;base64,${imageBase64}`,
@@ -107,7 +111,7 @@ export async function POST(request: NextRequest) {
       mockMode: false,
     });
   } catch (error) {
-    console.error('Future Self API error:', error);
+    logger.error('Future Self API error:', error);
     return NextResponse.json(
       { success: false, error: '미래 모습 생성 중 오류가 발생했습니다.' },
       { status: 500 }

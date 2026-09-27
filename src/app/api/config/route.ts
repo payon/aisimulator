@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { isMockMode, getMockScheduleFromDB } from '@/lib/mock-data';
+import { logger } from '@/lib/logger'
 
 /** GET - Public site config */
 export async function GET() {
@@ -34,7 +35,7 @@ export async function GET() {
       data: { siteName: 'AI 플랫폼', layoutMode: 'auto', mockMode: false, mockSchedule: null, maintenanceMode: false },
     });
   } catch (error) {
-    console.error('Config GET error:', error);
+    logger.error('Config GET error:', error);
     return NextResponse.json({
       success: true,
       data: { mockMode: false, mockSchedule: null, layoutMode: 'auto' },
@@ -65,7 +66,7 @@ export async function PUT(request: NextRequest) {
       data: { mockMode: Boolean(mockMode) },
     });
   } catch (error) {
-    console.error('Config PUT error:', error);
+    logger.error('Config PUT error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

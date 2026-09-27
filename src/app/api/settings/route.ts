@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { encryptSecret, decryptSecret } from '@/lib/crypto';
+import { logger } from '@/lib/logger';
+
+function preview(enc: string | null): string | null {
+  const v = decryptSecret(enc);
+  return v ? `${v.slice(0, 4)}...${v.slice(-2)}` : null;
+}
 
 // GET - Fetch settings
 export async function GET() {
@@ -16,40 +23,43 @@ export async function GET() {
         hasGeminiKey: !!settings.geminiKey,
         hasGrokKey: !!settings.grokKey,
         hasClaudeKey: !!settings.claudeKey,
-        openaiKeyPreview: settings.openaiKey ? `${settings.openaiKey.slice(0, 8)}...` : null,
-        geminiKeyPreview: settings.geminiKey ? `${settings.geminiKey.slice(0, 8)}...` : null,
-        grokKeyPreview: settings.grokKey ? `${settings.grokKey.slice(0, 8)}...` : null,
-        claudeKeyPreview: settings.claudeKey ? `${settings.claudeKey.slice(0, 8)}...` : null,
+        openaiKeyPreview: preview(settings.openaiKey),
+        geminiKeyPreview: preview(settings.geminiKey),
+        grokKeyPreview: preview(settings.grokKey),
+        claudeKeyPreview: preview(settings.claudeKey),
       },
     });
   } catch (error) {
-    console.error('Settings GET error:', error);
+    logger.error('Settings GET error', { error: String(error) });
     return NextResponse.json({ success: false, error: '설정을 불러오지 못했습니다.' }, { status: 500 });
   }
 }
 
-// PUT - Update settings
+// PUT - Update settings (API 키는 AES-256-GCM 암호화 저장)
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const { provider, openaiKey, geminiKey, grokKey, claudeKey } = body;
 
+    const enc = (v: unknown) =>
+      typeof v === 'string' && v.length > 0 ? encryptSecret(v) : v === '' ? null : undefined;
+
     const settings = await db.aiSettings.upsert({
       where: { id: 'default' },
       update: {
         ...(provider ? { provider } : {}),
-        ...(openaiKey !== undefined ? { openaiKey } : {}),
-        ...(geminiKey !== undefined ? { geminiKey } : {}),
-        ...(grokKey !== undefined ? { grokKey } : {}),
-        ...(claudeKey !== undefined ? { claudeKey } : {}),
+        ...(enc(openaiKey) !== undefined ? { openaiKey: enc(openaiKey) as string | null } : {}),
+        ...(enc(geminiKey) !== undefined ? { geminiKey: enc(geminiKey) as string | null } : {}),
+        ...(enc(grokKey) !== undefined ? { grokKey: enc(grokKey) as string | null } : {}),
+        ...(enc(claudeKey) !== undefined ? { claudeKey: enc(claudeKey) as string | null } : {}),
       },
       create: {
         id: 'default',
         provider: provider || 'zai-built-in',
-        openaiKey: openaiKey || null,
-        geminiKey: geminiKey || null,
-        grokKey: grokKey || null,
-        claudeKey: claudeKey || null,
+        openaiKey: (enc(openaiKey) as string | null) || null,
+        geminiKey: (enc(geminiKey) as string | null) || null,
+        grokKey: (enc(grokKey) as string | null) || null,
+        claudeKey: (enc(claudeKey) as string | null) || null,
       },
     });
 
@@ -64,7 +74,7 @@ export async function PUT(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Settings PUT error:', error);
+    logger.error('Settings PUT error:', error);
     return NextResponse.json({ success: false, error: '설정 저장에 실패했습니다.' }, { status: 500 });
   }
 }
@@ -140,7 +150,7 @@ export async function POST(request: NextRequest) {
       data: { valid: testSuccess, error: errorMessage },
     });
   } catch (error) {
-    console.error('Settings test error:', error);
+    logger.error('Settings test error:', error);
     return NextResponse.json({ success: false, error: 'API 키 테스트에 실패했습니다.' }, { status: 500 });
   }
 }

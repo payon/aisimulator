@@ -33,6 +33,35 @@ const nextConfig: NextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
           },
+          // 클릭재킹 방지
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          // Content Security Policy (Next.js 인라인 스크립트 허용 범위 내)
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://z-cdn.chatglm.cn",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "media-src 'self' data: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self' https: wss:",
+              "frame-ancestors 'self'",
+              "form-action 'self'",
+              "base-uri 'self'",
+            ].join('; '),
+          },
         ],
       },
       {

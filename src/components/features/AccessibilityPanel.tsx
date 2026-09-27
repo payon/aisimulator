@@ -71,11 +71,13 @@ export default function AccessibilityPanel({
     voiceEnabled,
     readingSpeed,
     touchTargetLarge,
+    language,
     setFontSize,
     toggleHighContrast,
     setVoiceEnabled,
     setReadingSpeed,
     setTouchTargetLarge,
+    setLanguage,
   } = useSettingsStore();
 
   const [open, setOpen] = useState(false);
@@ -327,6 +329,41 @@ export default function AccessibilityPanel({
                 onCheckedChange={setTouchTargetLarge}
               />
             </div>
+          </div>
+
+          <Separator />
+
+          {/* 언어 */}
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2 text-base font-semibold">
+              <Type className="w-4 h-4" />
+              언어 / Language
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 'ko', label: '한국어' },
+                { value: 'en', label: 'English' },
+              ].map((l) => (
+                <button
+                  key={l.value}
+                  onClick={() => {
+                    setLanguage(l.value);
+                    // CMS 표시 언어 즉시 동기화 (이벤트 핸들러에서 호출)
+                    import('@/hooks/use-cms-content').then((m) => m.setCmsLanguage(l.value));
+                  }}
+                  className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                    language === l.value
+                      ? 'border-primary bg-primary/5 shadow-sm'
+                      : 'border-transparent bg-muted/50 hover:bg-muted'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              관리자가 등록한 번역(en.* 콘텐츠)이 있으면 해당 언어로 표시됩니다.
+            </p>
           </div>
 
           <Separator />
