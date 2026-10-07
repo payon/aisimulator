@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { TABS, type TabId } from '@/types';
 import { useSpeechSynthesis } from '@/hooks/use-voice';
 import { useCmsContent, setCmsLanguage } from '@/hooks/use-cms-content';
+import { useNavItems } from '@/hooks/use-nav-items';
 import { useSettingsStore } from '@/stores/index';
 import { useClientValue } from '@/hooks/use-hydrated';
 import { detectKioskMode, isKioskMode, KIOSK_IDLE_RESET_MS } from '@/lib/kiosk';
@@ -13,6 +14,10 @@ import ChatPanel from '@/components/features/ChatPanel';
 import ImagePanel from '@/components/features/ImagePanel';
 import FutureMePanel from '@/components/features/FutureMePanel';
 import QuizPanel from '@/components/features/QuizPanel';
+import GuideBasicsPanel from '@/components/features/GuideBasicsPanel';
+import GuideServicesPanel from '@/components/features/GuideServicesPanel';
+import GuideAppPanel from '@/components/features/GuideAppPanel';
+import PracticePanel from '@/components/features/PracticePanel';
 import SettingsPanel from '@/components/features/SettingsPanel';
 import HomePage from '@/components/features/HomePage';
 import AccessibilityPanel from '@/components/features/AccessibilityPanel';
@@ -45,11 +50,15 @@ import {
 
 import {
   MessageSquare,
+  MessagesSquare,
   ImageIcon,
   Sparkles,
   GraduationCap,
   Settings,
   Home,
+  BookOpen,
+  Bot,
+  Smartphone,
   Volume2,
   VolumeX,
   X,
@@ -62,6 +71,10 @@ import { Separator } from '@/components/ui/separator';
 const TAB_ICONS: Record<TabId, React.ReactNode> = {
   home: <Home className="w-5 h-5" />,
   chat: <MessageSquare className="w-5 h-5" />,
+  guide: <BookOpen className="w-5 h-5" />,
+  services: <Bot className="w-5 h-5" />,
+  appguide: <Smartphone className="w-5 h-5" />,
+  practice: <MessagesSquare className="w-5 h-5" />,
   image: <ImageIcon className="w-5 h-5" />,
   future: <Sparkles className="w-5 h-5" />,
   quiz: <GraduationCap className="w-5 h-5" />,
@@ -141,6 +154,8 @@ const FONT_SIZE_CLASSES: Record<string, string> = {
 function AppSidebar({ activeTab, setActiveTab }: { activeTab: TabId; setActiveTab: (tab: TabId) => void }) {
   const { getContent } = useCmsContent();
   const { voiceEnabled } = useSettingsStore();
+  // 관리자 메뉴 관리(nav.order/nav.hidden/nav.<id>.label) 반영 — 저장 시 즉시 적용
+  const navItems = useNavItems();
 
   return (
     <Sidebar collapsible="icon" className="border-r">
@@ -163,17 +178,17 @@ function AppSidebar({ activeTab, setActiveTab }: { activeTab: TabId; setActiveTa
           <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">메뉴</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {TABS.map((tab) => (
+              {navItems.map(({ tab, label }) => (
                 <SidebarMenuItem key={tab.id}>
                   <SidebarMenuButton
                     isActive={activeTab === tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    tooltip={tab.label}
+                    tooltip={label}
                     className="h-11 group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10"
                     data-guide={`nav-${tab.id}`}
                   >
                     {TAB_ICONS[tab.id]}
-                    <span>{getContent(`nav.${tab.id}.label`, tab.label)}</span>
+                    <span>{label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -236,8 +251,8 @@ export default function MainApp() {
   // 탭 전환 시 TTS 재생 중지 (다른 메뉴로 이동하면 음성이 꺼져야 함)
   const prevTabRef = useRef<TabId>(activeTab);
   useEffect(() => {
-    if (prevTabRef.current === 'chat' && activeTab !== 'chat') {
-      // 채팅에서 다른 탭으로 전환 → TTS 즉시 중지
+    if ((prevTabRef.current === 'chat' || prevTabRef.current === 'practice') && activeTab !== prevTabRef.current) {
+      // 채팅/체험에서 다른 탭으로 전환 → TTS 즉시 중지
       stop();
     }
     if (activeTab === 'chat') {
@@ -447,6 +462,19 @@ export default function MainApp() {
                   {activeTab === 'home' && <HomePage onNavigate={setActiveTab} />}
                   {activeTab === 'chat' && (
                     <ChatPanel
+                      voiceEnabled={voiceEnabled}
+                      onToggleVoice={toggleVoice}
+                      speak={speak}
+                      stop={stop}
+                      engineReady={engineReady}
+                      speakServer={speakServer}
+                    />
+                  )}
+                  {activeTab === 'guide' && <GuideBasicsPanel />}
+                  {activeTab === 'services' && <GuideServicesPanel />}
+                  {activeTab === 'appguide' && <GuideAppPanel />}
+                  {activeTab === 'practice' && (
+                    <PracticePanel
                       voiceEnabled={voiceEnabled}
                       onToggleVoice={toggleVoice}
                       speak={speak}

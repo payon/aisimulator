@@ -11,6 +11,10 @@ import {
   Layout,
   AlertTriangle,
   Eye,
+  Upload,
+  CheckCircle2,
+  Trash2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -88,6 +92,24 @@ export default function SiteConfigEditor() {
   const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false);
   const [pendingMaintenance, setPendingMaintenance] = useState(false);
 
+  // 화면별 로고 (업로드 후 규격 자동 조정)
+  interface LogoItem {
+    file: string;
+    width: number;
+    height: number;
+    label: string;
+    targets: string;
+    url: string;
+    exists: boolean;
+    actualWidth: number | null;
+    actualHeight: number | null;
+    bytes: number;
+    match: boolean;
+  }
+  const [logoItems, setLogoItems] = useState<LogoItem[]>([]);
+  const [logoLoading, setLogoLoading] = useState(true);
+  const [logoUploading, setLogoUploading] = useState<string | null>(null);
+
   const fetchConfig = useCallback(async () => {
     setLoading(true);
     try {
@@ -113,6 +135,73 @@ export default function SiteConfigEditor() {
   useEffect(() => {
     fetchConfig();
   }, [fetchConfig]);
+
+  const fetchLogos = useCallback(async () => {
+    setLogoLoading(true);
+    try {
+      const res = await authenticatedFetch('/api/admin/logo');
+      if (res.ok) {
+        const data = await res.json();
+        setLogoItems(data.items || []);
+      } else if (res.status !== 401) {
+        toast.error('로고 목록을 불러오지 못했습니다.');
+      }
+    } catch {
+      toast.error('로고 목록을 불러오지 못했습니다.');
+    } finally {
+      setLogoLoading(false);
+    }
+  }, [authenticatedFetch]);
+
+  useEffect(() => {
+    fetchLogos();
+  }, [fetchLogos]);
+
+  const handleLogoUpload = async (fileName: string, file: File) => {
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      toast.error('PNG, JPG, WebP 파일만 업로드할 수 있습니다.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('파일 크기는 10MB 이하여야 합니다.');
+      return;
+    }
+    setLogoUploading(fileName);
+    try {
+      const form = new FormData();
+      form.append('name', fileName);
+      form.append('file', file);
+      const res = await authenticatedFetch('/api/admin/logo', { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success(`${data.width}x${data.height} 크기로 자동 조정되어 저장되었습니다.`);
+        fetchLogos();
+      } else if (res.status !== 401) {
+        toast.error(data.error || '업로드에 실패했습니다.');
+      }
+    } catch {
+      toast.error('업로드 중 오류가 발생했습니다.');
+    } finally {
+      setLogoUploading(null);
+    }
+  };
+
+  const handleLogoDelete = async (fileName: string) => {
+    try {
+      const res = await authenticatedFetch(`/api/admin/logo?name=${encodeURIComponent(fileName)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success('로고가 삭제되었습니다.');
+        fetchLogos();
+      } else if (res.status !== 401) {
+        toast.error(data.error || '삭제에 실패했습니다.');
+      }
+    } catch {
+      toast.error('삭제 중 오류가 발생했습니다.');
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -248,8 +337,110 @@ export default function SiteConfigEditor() {
                   <Input
                     value={logoUrl}
                     onChange={(e) => setLogoUrl(e.target.value)}
-                    placeholder="/logo.png"
+                    placeholder="/uploads/logo/logo-desktop.png"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    아래 화면별 로고에서 파일을 업로드한 뒤 [로고로 사용]을 누르면 자동 입력됩니다. 외부 URL도 직접 입력할 수 있습니다.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>화면별 로고 업로드 (자동 크기 조정)</Label>
+                  {logoLoading ? (
+                    <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      로고 목록을 불러오는 중...
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      {logoItems.map((item) => (
+                        <div
+                          key={item.file}
+                          className={`flex items-center gap-3 border rounded-lg p-3 ${logoUrl === item.url ? 'border-primary bg-primary/5' : ''}`}
+                        >
+                          <div className="w-14 h-14 rounded-lg border bg-muted overflow-hidden flex items-center justify-center shrink-0">
+                            {item.exists ? (
+                              <img
+                                src={`${item.url}?t=${item.bytes}`}
+                                alt={item.label}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium">{item.label}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{item.targets}</p>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <Badge variant="outline" className="text-[10px]">
+                                규격 {item.width}x{item.height}
+                              </Badge>
+                              {item.exists ? (
+                                <Badge variant={item.match ? 'default' : 'secondary'} className="text-[10px]">
+                                  {item.match ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3" /> 등록됨
+                                    </span>
+                                  ) : (
+                                    `실제 ${item.actualWidth}x{item.actualHeight}`
+                                  )}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px]">미등록</Badge>
+                              )}
+                              {logoUrl === item.url && (
+                                <Badge variant="default" className="text-[10px]">사용 중</Badge>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            <label className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-md border cursor-pointer hover:bg-muted">
+                              {logoUploading === item.file ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Upload className="w-3.5 h-3.5" />
+                              )}
+                              업로드
+                              <Input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                className="hidden"
+                                disabled={logoUploading !== null}
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0];
+                                  if (f) handleLogoUpload(item.file, f);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                            {item.exists && (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs h-7 px-2"
+                                  onClick={() => {
+                                    setLogoUrl(item.url);
+                                    toast.success(`${item.label}이(가) 로고로 설정되었습니다. 저장 버튼을 눌러 반영하세요.`);
+                                  }}
+                                >
+                                  로고로 사용
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs h-7 px-2 text-destructive hover:text-destructive"
+                                  onClick={() => handleLogoDelete(item.file)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <Separator />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

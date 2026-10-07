@@ -16,6 +16,7 @@ import {
   Bell,
   Loader2,
   Menu,
+  ListOrdered,
   LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ import { detectKioskMode, isKioskMode, type KioskMode } from '@/lib/kiosk';
 import AdminLogin from './AdminLogin';
 import AdminDashboard from './AdminDashboard';
 import ContentManager from './ContentManager';
+import MenuManager from './MenuManager';
 import UserManager from './UserManager';
 import RoleManager from './RoleManager';
 import AuditLogViewer from './AuditLogViewer';
@@ -77,15 +79,16 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { value: 'dashboard', label: '대시보드', icon: LayoutDashboard },
   { value: 'content', label: '콘텐츠 관리', icon: FileText },
+  { value: 'menus', label: '메뉴 관리', icon: ListOrdered },
   { value: 'users', label: '사용자 관리', icon: Users },
   { value: 'roles', label: '권한 관리', icon: Shield },
   { value: 'audit', label: '감사 로그', icon: Clock },
-  { value: 'config', label: '사이트 설정', icon: Settings },
   { value: 'mock', label: '목업 데이터', icon: FlaskConical },
   { value: 'icons', label: 'PWA 아이콘', icon: AppWindow },
   { value: 'security', label: '내 계정 보안', icon: KeyRound },
   { value: 'analytics', label: '사용량 분석', icon: BarChart3 },
   { value: 'push', label: '푸시 알림', icon: Bell },
+  { value: 'config', label: '사이트 설정', icon: Settings },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -98,6 +101,8 @@ function AdminContent({ activeTab }: { activeTab: string }) {
       return <AdminDashboard />;
     case 'content':
       return <ContentManager />;
+    case 'menus':
+      return <MenuManager />;
     case 'users':
       return <UserManager />;
     case 'roles':

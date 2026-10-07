@@ -1,0 +1,12 @@
+# Docker build context — prod 이미지에 불필요한 것은 제외
+node_modules
+.next
+out
+.git
+.env*
+*.log
+coverage
+/download/
+/upload/
+/db/
+Caddyfile

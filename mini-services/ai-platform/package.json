@@ -1,6 +1,0 @@
-{
-  "name": "ai-platform-service",
-  "scripts": {
-    "dev": "bun --hot index.ts"
-  }
-}

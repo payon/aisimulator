@@ -8,6 +8,8 @@ export const CONTENT_CATEGORIES = [
   'image',
   'future',
   'quiz',
+  'guide',
+  'practice',
   'settings',
   'global',
   'nav',

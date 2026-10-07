@@ -17,6 +17,31 @@ interface AnalyticsData {
   byEntity: { name: string; count: number }[];
 }
 
+// UserActivity 영문 액션/엔티티 → 한글 표시 (DB 값은 그대로, 화면에만 매핑)
+const ACTION_LABELS: Record<string, string> = {
+  chat_message: 'AI 대화',
+  practice_message: '질문 체험',
+  quiz_start: '퀴즈 시작',
+  image_transform: '이미지 변환',
+  future_generate: '미래 모습 생성',
+  page_view: '페이지 조회',
+};
+
+const ENTITY_LABELS: Record<string, string> = {
+  chat: 'AI 대화',
+  practice: '질문 체험',
+  quiz: '퀴즈',
+  image: '이미지 변환',
+  future: '미래의 나',
+  admin: '관리자',
+  settings: '설정',
+  content: '콘텐츠',
+};
+
+function localize(list: { name: string; count: number }[], labels: Record<string, string>) {
+  return list.map((item) => ({ ...item, name: labels[item.name] ?? item.name }));
+}
+
 export default function AnalyticsPanel() {
   const { authenticatedFetch } = useAdminAuth();
   const [data, setData] = useState<AnalyticsData | null>(null);
@@ -27,7 +52,12 @@ export default function AnalyticsPanel() {
       setLoading(true);
       const res = await authenticatedFetch('/api/admin/analytics');
       if (res.ok) {
-        setData(await res.json());
+        const raw = await res.json();
+        setData({
+          ...raw,
+          byAction: localize(raw.byAction || [], ACTION_LABELS),
+          byEntity: localize(raw.byEntity || [], ENTITY_LABELS),
+        });
       } else if (res.status !== 401) {
         toast.error('분석 데이터를 불러오지 못했습니다.');
       }

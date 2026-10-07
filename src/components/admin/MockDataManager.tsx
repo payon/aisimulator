@@ -17,6 +17,7 @@ import {
   Trash2,
   Upload,
   X,
+  Lightbulb,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,15 +71,28 @@ interface QuizData {
   hard: QuizQuestion[];
 }
 
+interface PracticeExample {
+  id: string;
+  question: string;
+  hint?: string;
+}
+
+interface PracticeData {
+  examples: PracticeExample[];
+  answers: Record<string, string>;
+  default: string;
+}
+
 interface MockData {
   chat: ChatResponses;
   image: { message: string; results: Record<string, string> };
   future: FutureSelfData & { results: Record<string, string> };
   quiz: QuizData;
+  practice: PracticeData;
   schedule: MockSchedule | null;
 }
 
-type MockTab = 'chat' | 'image' | 'future' | 'quiz' | 'period';
+type MockTab = 'chat' | 'image' | 'future' | 'quiz' | 'practice' | 'period';
 
 // ============================================
 // 기본 목업 데이터
@@ -208,8 +222,76 @@ const DEFAULT_QUIZ: QuizData = {
   ],
 };
 
-const DIFFICULTY_LABELS: Record<string, string> = {
-  easy: '초급',
+const DEFAULT_PRACTICE: PracticeData = {
+  examples: [
+    { id: 'what-is-ai', question: 'AI란 무엇인가요?', hint: '가장 기본적인 질문이에요' },
+    { id: 'chatgpt-how', question: 'ChatGPT는 어떻게 사용하나요?', hint: '대표 서비스 이용법' },
+    { id: 'app-install', question: '스마트폰에 AI 앱을 어떻게 설치하나요?', hint: '앱 설치 안내' },
+    { id: 'good-question', question: 'AI에게 좋은 질문을 하려면 어떻게 해야 하나요?', hint: '질문 잘하는 법' },
+    { id: 'health-info', question: '건강 정보를 AI에게 물어봐도 되나요?', hint: '생활 속 활용' },
+  ],
+  answers: {
+    'AI란 무엇인가요?': `좋은 질문이에요! 😊
+
+**AI(인공지능)란?**
+컴퓨터가 사람처럼 배우고 생각하는 기술이에요. 계산기처럼 정해진 답만 내는 게 아니라, 대화를 통해 새로운 답을 만들어냅니다.
+
+**생활 속 예시:**
+• 스마트폰 음성 비서 (시리, 빅스비)
+• 유튜브·넷플릭스 추천 영상
+• 사진 속 글자를 읽어주는 번역 앱
+
+직접 한 번 따라해 보세요 → "AI로 무엇을 할 수 있나요?"라고 물어보세요!`,
+    'ChatGPT는 어떻게 사용하나요?': `ChatGPT 사용법을 알려드릴게요! 💬
+
+1. **앱 설치** — 스마트폰 앱스토어에서 "ChatGPT"를 검색해 설치하세요
+2. **가입** — 이메일이나 구글·애플 계정으로 가입하세요
+3. **질문** — 아래 입력창에 궁금한 것을 쓰고 보내기(➤)를 누르세요
+4. **대화** — 답변이 오면 이어서 "더 쉽게 설명해줘"라고 물어보세요
+
+💡 **팁:** 처음엔 짧은 질문부터 시작하세요. 예) "오늘 날씨에 맞는 옷차림 알려줘"`,
+    '스마트폰에 AI 앱을 어떻게 설치하나요?': `스마트폰 앱 설치, 천천히 따라해 보세요! 📱
+
+**안드로이드(삼성 등):**
+1. Play 스토어 앱을 여세요
+2. 위 검색창에 "ChatGPT" 또는 "Gemini" 입력
+3. [설치] 버튼을 누르세요
+4. 설치가 끝나면 [열기]를 누르세요
+
+**아이폰:**
+1. App Store 앱을 여세요
+2. 하단 [검색] → "ChatGPT" 입력
+3. [받기] → 얼굴 인식·비밀번호로 확인
+
+⚠️ **주의:** 이름이 비슷해도 제작사가 "OpenAI", "Google"인지 꼭 확인하세요!`,
+    'AI에게 좋은 질문을 하려면 어떻게 해야 하나요?': `좋은 질문 3가지 비법이에요! ✨
+
+1. **구체적으로** — ❌ "건강 알려줘" → ⭕ "70대에게 좋은 하루 30분 운동 알려줘"
+2. **상황을 함께** — "스마트폰이 느려졌어. 사진이 많아서 그래. 어떻게 정리해?"처럼 배경을 말하세요
+3. **이어서 묻기** — 답이 어려우면 "초등학생도 알도록 쉽게 설명해줘"라고 하세요
+
+연습해 보세요 → 아래 입력창에 여러분만의 질문을 직접 써보세요!`,
+    '건강 정보를 AI에게 물어봐도 되나요?': `네, 참고용으로는 좋아요! 다만 꼭 기억하세요 💪
+
+**AI에게 물어보면 좋은 것:**
+• 일반적인 건강 상식 (예: "걷기 운동의 효과가 뭐야?")
+• 병원 가기 전 궁금한 점 정리
+• 약 복용 시간표 만들기
+
+**주의할 점:**
+• AI 답변은 의사의 진단이 아니에요
+• 몸이 아프면 꼭 병원·약국에 먼저 가세요!`,
+  },
+  default: `좋은 질문이에요! 😊
+
+[시뮬레이션 모드] 현재 미리 준비된 답변을 보여드리고 있습니다.
+
+실제 AI 모드에서는 여러분의 질문에 AI가 직접 답변을 만듭니다. 예시 질문 버튼을 눌러 다양한 답변을 확인해 보세요!
+
+💡 **따라해 보세요:** 질문을 짧고 구체적으로 쓰면 더 좋은 답을 받을 수 있어요. 예) "스마트폰 글자 크게 하는 법 알려줘"`,
+};
+
+const DIFFICULTY_LABELS: Record<string, string> = {  easy: '초급',
   medium: '중급',
   hard: '고급',
 };
@@ -225,6 +307,7 @@ const TAB_CONFIG: { key: MockTab; label: string; icon: React.ReactNode }[] = [
   { key: 'image', label: '이미지 변환', icon: <ImageIcon className="w-4 h-4" /> },
   { key: 'future', label: '미래의 나', icon: <Sparkles className="w-4 h-4" /> },
   { key: 'quiz', label: 'AI 퀴즈', icon: <GraduationCap className="w-4 h-4" /> },
+  { key: 'practice', label: '질문 체험', icon: <Lightbulb className="w-4 h-4" /> },
   { key: 'period', label: '체험 기간', icon: <CalendarClock className="w-4 h-4" /> },
 ];
 
@@ -324,6 +407,7 @@ export default function MockDataManager() {
     image: { ...DEFAULT_IMAGE, results: emptyResults(IMAGE_STYLE_IDS) },
     future: { ...DEFAULT_FUTURE, results: emptyResults(FUTURE_AGE_IDS) },
     quiz: DEFAULT_QUIZ,
+    practice: DEFAULT_PRACTICE,
     schedule: null,
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -356,6 +440,17 @@ export default function MockDataManager() {
               easy: Array.isArray(md.quiz?.easy) ? md.quiz.easy : DEFAULT_QUIZ.easy,
               medium: Array.isArray(md.quiz?.medium) ? md.quiz.medium : DEFAULT_QUIZ.medium,
               hard: Array.isArray(md.quiz?.hard) ? md.quiz.hard : DEFAULT_QUIZ.hard,
+            },
+            practice: {
+              examples: Array.isArray(md.practice?.examples) && md.practice.examples.length > 0
+                ? md.practice.examples
+                : DEFAULT_PRACTICE.examples,
+              answers: md.practice?.answers && typeof md.practice.answers === 'object'
+                ? md.practice.answers
+                : DEFAULT_PRACTICE.answers,
+              default: typeof md.practice?.default === 'string' && md.practice.default
+                ? md.practice.default
+                : DEFAULT_PRACTICE.default,
             },
             schedule: md.schedule ?? null,
           });
@@ -410,6 +505,7 @@ export default function MockDataManager() {
           image: { ...DEFAULT_IMAGE, results: emptyResults(IMAGE_STYLE_IDS) },
           future: { ...DEFAULT_FUTURE, results: emptyResults(FUTURE_AGE_IDS) },
           quiz: DEFAULT_QUIZ,
+          practice: DEFAULT_PRACTICE,
           schedule: null,
         });
         setHasChanges(false);
@@ -581,6 +677,54 @@ export default function MockDataManager() {
         ...prev.quiz,
         [difficulty]: prev.quiz[difficulty].filter((_, i) => i !== index),
       },
+    }));
+    setHasChanges(true);
+  };
+
+  // 질문 체험(프랙티스) 업데이트
+  const updatePracticeExample = (index: number, field: keyof PracticeExample, value: string) => {
+    setMockData((prev) => {
+      const examples = [...prev.practice.examples];
+      examples[index] = { ...examples[index], [field]: value };
+      return { ...prev, practice: { ...prev.practice, examples } };
+    });
+    setHasChanges(true);
+  };
+
+  const addPracticeExample = () => {
+    setMockData((prev) => ({
+      ...prev,
+      practice: {
+        ...prev.practice,
+        examples: [...prev.practice.examples, { id: `ex-${Date.now()}`, question: '', hint: '' }],
+      },
+    }));
+    setHasChanges(true);
+  };
+
+  const removePracticeExample = (index: number) => {
+    setMockData((prev) => ({
+      ...prev,
+      practice: {
+        ...prev.practice,
+        examples: prev.practice.examples.filter((_, i) => i !== index),
+      },
+    }));
+    setHasChanges(true);
+  };
+
+  const updatePracticeAnswer = (question: string, value: string) => {
+    setMockData((prev) => ({
+      ...prev,
+      practice: { ...prev.practice, answers: { ...prev.practice.answers, [question]: value } },
+    }));
+    setHasChanges(true);
+  };
+
+  const updatePracticeDefault = (value: string) => {
+    setMockData((prev) => ({
+      ...prev,
+      practice: { ...prev.practice, default: value },
     }));
     setHasChanges(true);
   };
@@ -975,6 +1119,123 @@ export default function MockDataManager() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          )}
+          {/* 질문 체험 탭 */}
+          {activeTab === 'practice' && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                질문 체험 메뉴의 예시 질문 목록과 질문별 시뮬레이션 답변을 편집합니다.
+                저장하면 시뮬레이션 모드의 프론트에 즉시 반영됩니다.
+              </p>
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Lightbulb className="w-4 h-4 text-primary" />
+                      예시 질문 목록
+                      <Badge variant="secondary" className="text-xs">
+                        {mockData.practice.examples.length}개
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px]">
+                        mock.practice.examples
+                      </Badge>
+                    </CardTitle>
+                    <Button variant="outline" size="sm" onClick={addPracticeExample}>
+                      <Plus className="w-4 h-4" />
+                      질문 추가
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {mockData.practice.examples.map((ex, index) => (
+                    <div key={ex.id || index} className="border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline">예시 {index + 1}</Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removePracticeExample(index)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">질문</Label>
+                        <Input
+                          value={ex.question}
+                          onChange={(e) => updatePracticeExample(index, 'question', e.target.value)}
+                          className="mt-1"
+                          placeholder="예: AI란 무엇인가요?"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">힌트 (선택)</Label>
+                        <Input
+                          value={ex.hint || ''}
+                          onChange={(e) => updatePracticeExample(index, 'hint', e.target.value)}
+                          className="mt-1"
+                          placeholder="예: 가장 기본적인 질문이에요"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-primary" />
+                    질문별 시뮬레이션 답변
+                    <Badge variant="outline" className="text-[10px]">
+                      mock.practice.answers
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    💡 위 예시 질문 목록의 각 질문에 대한 답변입니다. 질문 문구를 기준으로 매칭되며,
+                    목록에 없는 질문은 아래 기본 답변이 표시됩니다.
+                  </p>
+                  {mockData.practice.examples.map((ex, index) => (
+                    <div key={ex.id || index} className="space-y-1">
+                      <Label className="text-xs font-medium">
+                        “{ex.question || `(예시 ${index + 1} — 질문을 먼저 입력하세요)`}”에 대한 답변
+                      </Label>
+                      <Textarea
+                        value={ex.question ? (mockData.practice.answers[ex.question] || '') : ''}
+                        onChange={(e) => ex.question && updatePracticeAnswer(ex.question, e.target.value)}
+                        rows={6}
+                        className="font-mono text-sm resize-y"
+                        placeholder="이 질문을 눌렀을 때 보여줄 답변을 입력하세요"
+                        disabled={!ex.question}
+                      />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-primary" />
+                    기본 답변
+                    <Badge variant="outline" className="text-[10px]">
+                      mock.practice.default
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Textarea
+                    value={mockData.practice.default}
+                    onChange={(e) => updatePracticeDefault(e.target.value)}
+                    rows={6}
+                    className="font-mono text-sm resize-y"
+                  />
+                </CardContent>
+              </Card>
             </div>
           )}
           {/* 체험 기간 탭 */}

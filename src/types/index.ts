@@ -126,6 +126,10 @@ export type TabId =
   | 'image'
   | 'future'
   | 'quiz'
+  | 'guide'
+  | 'services'
+  | 'appguide'
+  | 'practice'
   | 'settings';
 
 export interface TabInfo {
@@ -138,6 +142,10 @@ export interface TabInfo {
 export const TABS: TabInfo[] = [
   { id: 'home', label: '홈', emoji: '🏠', description: 'AI 플랫폼 메인 화면' },
   { id: 'chat', label: 'AI 대화', emoji: '💬', description: 'AI와 대화하기' },
+  { id: 'guide', label: 'AI 기초 안내', emoji: '📖', description: '생성형 AI 기초와 활용 방법' },
+  { id: 'services', label: 'AI 서비스 소개', emoji: '🤖', description: '대표 생성형 AI 서비스 소개' },
+  { id: 'appguide', label: '앱 설치 안내', emoji: '📱', description: '스마트폰 앱 설치와 기본 이용법' },
+  { id: 'practice', label: '질문 체험', emoji: '🙋', description: '예시 질문으로 답변 과정 체험' },
   { id: 'image', label: '이미지 변환', emoji: '🖼️', description: 'AI로 이미지 변환' },
   { id: 'future', label: '미래의 나', emoji: '🔮', description: '미래의 내 모습 보기' },
   { id: 'quiz', label: 'AI 퀴즈', emoji: '📝', description: 'AI 지식 퀴즈' },
@@ -200,4 +208,17 @@ export interface QuickAction {
   icon: string;
   tabId: TabId;
   description: string;
+}
+
+// 예시 질문 체험(프랙티스) 관련
+export interface PracticeExample {
+  id: string;
+  question: string;
+  hint?: string;
+}
+
+export interface PracticeExchange {
+  question: string;
+  answer: string;
+  mockMode?: boolean;
 }

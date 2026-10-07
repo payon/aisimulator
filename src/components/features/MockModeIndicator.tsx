@@ -4,13 +4,17 @@ import { motion } from 'framer-motion';
 import { FlaskConical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-type FeatureType = 'chat' | 'image' | 'future' | 'quiz';
+type FeatureType = 'chat' | 'image' | 'future' | 'quiz' | 'guide' | 'services' | 'appguide' | 'practice';
 
 const FEATURE_DESCRIPTIONS: Record<FeatureType, string> = {
   chat: '미리 준비된 답변으로 AI 대화를 시연합니다. 실제 AI를 사용하려면 설정에서 시뮬레이션 모드를 끄세요.',
   image: '이미지 변환 과정을 시연합니다. 관리자가 등록한 체험 이미지가 표시될 수 있습니다.',
   future: '미래 모습 생성 과정을 시연합니다. 관리자가 등록한 체험 이미지와 건강 팁이 제공됩니다.',
   quiz: '미리 준비된 퀴즈 문제로 시연합니다. 난이도별 5문제가 제공됩니다.',
+  guide: '관리자가 작성한 안내 내용으로 시연합니다. 콘텐츠 관리에서 문구를 수정하면 바로 반영됩니다.',
+  services: '관리자가 작성한 서비스 소개로 시연합니다. 콘텐츠 관리에서 문구를 수정하면 바로 반영됩니다.',
+  appguide: '관리자가 작성한 앱 설치 안내로 시연합니다. 콘텐츠 관리에서 문구를 수정하면 바로 반영됩니다.',
+  practice: '관리자가 준비한 예시 질문과 답변으로 시연합니다. 실제 AI를 사용하려면 설정에서 시뮬레이션 모드를 끄세요.',
 };
 
 interface MockModeIndicatorProps {

@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   MessageSquare,
+  MessagesSquare,
   ImageIcon,
   Sparkles,
   GraduationCap,
@@ -12,16 +13,78 @@ import {
   Zap,
   ArrowRight,
   Volume2,
+  BookOpen,
+  Bot,
+  Smartphone,
 } from 'lucide-react';
 import type { TabId } from '@/types';
 import { useCmsContent } from '@/hooks/use-cms-content';
+import { useNavItems } from '@/hooks/use-nav-items';
 import { useSettingsStore } from '@/stores/index';
 
 interface HomePageProps {
   onNavigate: (tab: TabId) => void;
 }
 
+const FALLBACK_TITLES: Record<TabId, string> = {
+  home: '홈',
+  chat: 'AI 대화하기',
+  guide: 'AI 기초 안내',
+  services: 'AI 서비스 소개',
+  appguide: '앱 설치 안내',
+  practice: '예시 질문 체험',
+  image: '이미지 변환',
+  future: '미래의 나',
+  quiz: 'AI 퀴즈',
+  settings: '설정',
+};
+
+const FALLBACK_DESCS: Record<TabId, string> = {
+  home: 'AI 플랫폼 메인 화면',
+  chat: 'AI와 자연스럽게 대화하며 궁금한 것을 물어보세요',
+  guide: '생성형 AI가 무엇인지, 어떻게 활용하는지 배워보세요',
+  services: 'ChatGPT·Gemini 등 대표 AI 서비스를 비교해 보세요',
+  appguide: '스마트폰에 AI 앱을 설치하고 기본 사용법을 익혀보세요',
+  practice: '예시 질문을 눌러 AI 답변 과정을 직접 체험해 보세요',
+  image: '내 사진을 수채화, 만화, 애니메이션 등으로 변환',
+  future: 'AI로 미래의 내 모습을 생성하고 건강 팁을 받아보세요',
+  quiz: '초급/중급/고급 난이도로 AI 지식을 테스트하세요',
+  settings: 'OpenAI, Gemini, Grok, Claude API 키를 설정하세요',
+};
+
 const featureDefs = [
+  {
+    id: 'guide' as TabId,
+    icon: BookOpen,
+    gradient: 'from-sky-500 to-blue-500',
+    bgGradient: 'from-sky-50 to-blue-50',
+    iconColor: 'text-sky-600',
+    borderHover: 'hover:border-sky-300',
+  },
+  {
+    id: 'services' as TabId,
+    icon: Bot,
+    gradient: 'from-cyan-500 to-sky-500',
+    bgGradient: 'from-cyan-50 to-sky-50',
+    iconColor: 'text-cyan-600',
+    borderHover: 'hover:border-cyan-300',
+  },
+  {
+    id: 'appguide' as TabId,
+    icon: Smartphone,
+    gradient: 'from-indigo-500 to-blue-500',
+    bgGradient: 'from-indigo-50 to-blue-50',
+    iconColor: 'text-indigo-600',
+    borderHover: 'hover:border-indigo-300',
+  },
+  {
+    id: 'practice' as TabId,
+    icon: MessagesSquare,
+    gradient: 'from-teal-500 to-emerald-500',
+    bgGradient: 'from-teal-50 to-emerald-50',
+    iconColor: 'text-teal-600',
+    borderHover: 'hover:border-teal-300',
+  },
   {
     id: 'chat' as TabId,
     icon: MessageSquare,
@@ -67,12 +130,20 @@ const featureDefs = [
 export default function HomePage({ onNavigate }: HomePageProps) {
   const { getContent } = useCmsContent();
   const { voiceEnabled } = useSettingsStore();
+  // 관리자 메뉴 관리 순서·표시 반영 (사이드바와 동일 순서)
+  const navItems = useNavItems();
+  const defById = new Map(featureDefs.map((def) => [def.id, def]));
 
-  const features = featureDefs.map((def) => ({
-    ...def,
-    title: getContent(`home.feature.${def.id}.title`, def.id === 'chat' ? 'AI 대화하기' : def.id === 'image' ? '이미지 변환' : def.id === 'future' ? '미래의 나' : def.id === 'quiz' ? 'AI 퀴즈' : '설정'),
-    description: getContent(`home.feature.${def.id}.description`, def.id === 'chat' ? 'AI와 자연스럽게 대화하며 궁금한 것을 물어보세요' : def.id === 'image' ? '내 사진을 수채화, 만화, 애니메이션 등으로 변환' : def.id === 'future' ? 'AI로 미래의 내 모습을 생성하고 건강 팁을 받아보세요' : def.id === 'quiz' ? '초급/중급/고급 난이도로 AI 지식을 테스트하세요' : 'OpenAI, Gemini, Grok, Claude API 키를 설정하세요'),
-  }));
+  const features = navItems
+    .filter(({ tab }) => defById.has(tab.id))
+    .map(({ tab }) => {
+      const def = defById.get(tab.id)!;
+      return {
+        ...def,
+        title: getContent(`nav.${tab.id}.label`, getContent(`home.feature.${tab.id}.title`, FALLBACK_TITLES[tab.id])),
+        description: getContent(`home.feature.${tab.id}.description`, FALLBACK_DESCS[tab.id]),
+      };
+    });
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -115,7 +186,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mt-6 mb-4">
             <h2 className="text-lg font-semibold">기능 선택</h2>
-            <Badge variant="outline" className="text-xs">5개 기능</Badge>
+            <Badge variant="outline" className="text-xs">{features.length}개 기능</Badge>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">

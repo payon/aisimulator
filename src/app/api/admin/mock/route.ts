@@ -9,6 +9,9 @@ import {
   MOCK_QUIZ_DATA,
   MOCK_FUTURE_SELF,
   MOCK_IMAGE_MESSAGE,
+  MOCK_PRACTICE_EXAMPLES,
+  MOCK_PRACTICE_ANSWERS,
+  MOCK_PRACTICE_DEFAULT,
 } from '@/lib/mock-data';
 
 // ============================================
@@ -30,6 +33,9 @@ const MOCK_KEYS = {
   'mock.quiz.easy': () => JSON.stringify(MOCK_QUIZ_DATA.easy),
   'mock.quiz.medium': () => JSON.stringify(MOCK_QUIZ_DATA.medium),
   'mock.quiz.hard': () => JSON.stringify(MOCK_QUIZ_DATA.hard),
+  'mock.practice.examples': () => JSON.stringify(MOCK_PRACTICE_EXAMPLES),
+  'mock.practice.answers': () => JSON.stringify(MOCK_PRACTICE_ANSWERS),
+  'mock.practice.default': () => MOCK_PRACTICE_DEFAULT,
   'mock.schedule': () => '',
   ...Object.fromEntries(IMAGE_RESULT_STYLES.map((s) => [`mock.image.result.${s}`, () => ''])),
   ...Object.fromEntries(FUTURE_RESULT_AGES.map((a) => [`mock.future.result.${a}`, () => ''])),
@@ -101,6 +107,11 @@ export async function GET(request: NextRequest) {
         health: mockData['mock.chat.health'],
         smartphone: mockData['mock.chat.smartphone'],
         default: mockData['mock.chat.default'],
+      },
+      practice: {
+        examples: JSON.parse(mockData['mock.practice.examples']),
+        answers: JSON.parse(mockData['mock.practice.answers']),
+        default: mockData['mock.practice.default'],
       },
       image: {
         message: mockData['mock.image.message'],
@@ -250,6 +261,17 @@ export async function POST(request: NextRequest) {
     }
     if (mockData.quiz?.hard !== undefined) {
       entries.push({ key: 'mock.quiz.hard', value: JSON.stringify(mockData.quiz.hard), category: 'quiz', type: 'json' });
+    }
+
+    // 질문 체험(프랙티스) — 예시 질문 목록 + 질문별 답변 + 기본 답변
+    if (mockData.practice?.examples !== undefined) {
+      entries.push({ key: 'mock.practice.examples', value: JSON.stringify(mockData.practice.examples), category: 'mock', type: 'json' });
+    }
+    if (mockData.practice?.answers !== undefined) {
+      entries.push({ key: 'mock.practice.answers', value: JSON.stringify(mockData.practice.answers), category: 'mock', type: 'json' });
+    }
+    if (mockData.practice?.default !== undefined) {
+      entries.push({ key: 'mock.practice.default', value: mockData.practice.default, category: 'mock', type: 'rich_text' });
     }
 
     // DB에 upsert

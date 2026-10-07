@@ -59,6 +59,14 @@ server.log
 /public/uploads/*
 !/public/uploads/.gitkeep
 
+# local-only docs & dev artifacts (not shipped to prod)
+/doc/
+/worklog.md
+/upload/
+/tool-results/
+/test-results/
+/agent-browser
+
 # release archives
 *.tar.gz
 *.tar
