@@ -11,8 +11,8 @@ cd aiplatform
 docker compose up -d --build
 ```
 
-- 앱: `http://서버IP:3300`
-- 관리자: `http://서버IP:3300/admin`
+- 앱: `https://aiplatform.rustkorea.cloud` (도메인 경유, 3300 직접 접속 차단)
+- 관리자: `https://aiplatform.rustkorea.cloud/admin`
   - 초기 아이디 `admin@aiplatform.kr` / 초기 비밀번호 `admin123`
   - 첫 로그인 시 비밀번호 변경 필수
 - DB(PostgreSQL)·업로드는 Docker 볼륨에 보관되어 재배포해도 유지됩니다.

@@ -20,7 +20,8 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-3300}:3300"
+      # 도메인(CloudPanel nginx → 127.0.0.1:3300)으로만 서비스, 외부 직접 접속 차단
+      - "127.0.0.1:${APP_PORT:-3300}:3300"
     depends_on:
       db:
         condition: service_healthy
